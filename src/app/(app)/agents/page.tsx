@@ -106,6 +106,7 @@ export default function AgentsPage() {
   }
 
   function applyTemplate(tpl: typeof PROMPT_TEMPLATES[0]) {
+    setName(tpl.label);
     setRole(tpl.role);
     setSystemPrompt(tpl.prompt);
   }
@@ -143,10 +144,10 @@ export default function AgentsPage() {
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-cloudy/10 px-8 py-6">
+      <div className="flex items-center justify-between border-b border-gray-500/10 px-8 py-6">
         <div>
           <h1 className="text-2xl font-bold font-serif text-gray-900">Asisten AI</h1>
-          <p className="mt-1 text-sm text-cloudy">
+          <p className="mt-1 text-sm text-gray-500">
             Buat persona AI khusus dengan instruksi dan gaya jawaban yang berbeda-beda.
           </p>
         </div>
@@ -166,14 +167,14 @@ export default function AgentsPage() {
 
           {/* Form */}
           {isFormOpen && (
-            <div className="mb-8 rounded-2xl border border-cloudy/20 bg-white p-8 shadow-sm">
+            <div className="mb-8 rounded-2xl border border-gray-500/20 bg-white p-8 shadow-sm">
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-gray-900">
                   {editingAgent ? "Edit Asisten" : "Buat Asisten Baru"}
                 </h2>
                 <button
                   onClick={() => setIsFormOpen(false)}
-                  className="text-sm text-cloudy hover:text-gray-900"
+                  className="text-sm text-gray-500 hover:text-gray-900"
                 >
                   Batal
                 </button>
@@ -181,14 +182,14 @@ export default function AgentsPage() {
 
               {/* Templates */}
               <div className="mb-6">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-cloudy">Template Cepat</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Template Cepat</p>
                 <div className="flex flex-wrap gap-2">
                   {PROMPT_TEMPLATES.map((tpl) => (
                     <button
                       key={tpl.label}
                       type="button"
                       onClick={() => applyTemplate(tpl)}
-                      className="rounded-full border border-cloudy/20 bg-pampas px-3 py-1.5 text-xs font-medium text-foreground transition-all hover:border-gray-900/30 hover:bg-gray-900/5"
+                      className="rounded-full border border-gray-500/20 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-900 transition-all hover:border-gray-900/30 hover:bg-gray-900/5"
                     >
                       {tpl.label}
                     </button>
@@ -199,7 +200,7 @@ export default function AgentsPage() {
               <form onSubmit={handleSave} className="space-y-5">
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-cloudy">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-500">
                       Nama Asisten <span className="text-gray-900">*</span>
                     </label>
                     <input
@@ -208,11 +209,11 @@ export default function AgentsPage() {
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Tutor Fisika, Reviewer Skripsi, dll."
                       required
-                      className="w-full rounded-xl border border-cloudy/30 bg-pampas px-4 py-3 text-sm outline-none focus:border-gray-900 focus:bg-white"
+                      className="w-full rounded-xl border border-gray-500/30 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-900 focus:bg-white"
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-cloudy">
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-500">
                       Peran Singkat <span className="text-gray-900">*</span>
                     </label>
                     <input
@@ -221,13 +222,13 @@ export default function AgentsPage() {
                       onChange={(e) => setRole(e.target.value)}
                       placeholder="Misal: Ahli kimia organik yang sabar"
                       required
-                      className="w-full rounded-xl border border-cloudy/30 bg-pampas px-4 py-3 text-sm outline-none focus:border-gray-900 focus:bg-white"
+                      className="w-full rounded-xl border border-gray-500/30 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-900 focus:bg-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-cloudy">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-500">
                     Instruksi Sistem (System Prompt) <span className="text-gray-900">*</span>
                   </label>
                   <textarea
@@ -237,13 +238,13 @@ export default function AgentsPage() {
                     required
                     minLength={10}
                     placeholder="Jelaskan kepribadian, gaya bahasa, dan cara AI ini harus merespons pengguna..."
-                    className="w-full rounded-xl border border-cloudy/30 bg-pampas px-4 py-3 text-sm outline-none focus:border-gray-900 focus:bg-white resize-none"
+                    className="w-full rounded-xl border border-gray-500/30 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-900 focus:bg-white resize-none"
                   />
-                  <p className="mt-1.5 text-xs text-cloudy">{systemPrompt.length} karakter</p>
+                  <p className="mt-1.5 text-xs text-gray-500">{systemPrompt.length} karakter</p>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-cloudy">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-500">
                     Ikon Avatar
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -255,7 +256,7 @@ export default function AgentsPage() {
                         className={`flex h-10 w-10 items-center justify-center rounded-xl border transition-all ${
                           avatarIcon === iconName
                             ? "border-gray-900 bg-gray-900 text-white shadow-md"
-                            : "border-cloudy/20 bg-pampas text-cloudy hover:border-gray-400 hover:text-gray-900"
+                            : "border-gray-500/20 bg-gray-50 text-gray-500 hover:border-gray-400 hover:text-gray-900"
                         }`}
                         title={iconName}
                       >
@@ -289,15 +290,15 @@ export default function AgentsPage() {
           {/* Agent List */}
           {isLoading ? (
             <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-cloudy" />
+              <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
             </div>
           ) : agents.length === 0 && !isFormOpen ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-cloudy/30 bg-pampas py-16 text-center">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-500/30 bg-gray-50 py-16 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-900/10">
                 <Bot className="h-8 w-8 text-gray-900" />
               </div>
               <h3 className="mb-1 text-base font-bold text-gray-900">Belum ada Asisten AI</h3>
-              <p className="mb-6 max-w-xs text-sm text-cloudy">
+              <p className="mb-6 max-w-xs text-sm text-gray-500">
                 Buat persona AI khusus dengan gaya bicara dan fokus bidang yang kamu inginkan.
               </p>
               <button
@@ -312,7 +313,7 @@ export default function AgentsPage() {
               {agents.map((agent) => (
                 <div
                   key={agent.id}
-                  className="group relative flex flex-col rounded-2xl border border-cloudy/20 bg-white p-6 shadow-sm transition-all hover:shadow-md"
+                  className="group relative flex flex-col rounded-2xl border border-gray-500/20 bg-white p-6 shadow-sm transition-all hover:shadow-md"
                 >
                   {/* Avatar + Name */}
                   <div className="mb-4 flex items-start gap-4">
@@ -321,7 +322,7 @@ export default function AgentsPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="font-bold text-gray-900 leading-tight">{agent.name}</h3>
-                      <p className="mt-0.5 text-xs text-cloudy line-clamp-2">{agent.role}</p>
+                      <p className="mt-0.5 text-xs text-gray-500 line-clamp-2">{agent.role}</p>
                     </div>
                   </div>
 
@@ -331,10 +332,10 @@ export default function AgentsPage() {
                   </p>
 
                   {/* Actions */}
-                  <div className="mt-5 flex items-center gap-2 border-t border-cloudy/10 pt-4">
+                  <div className="mt-5 flex items-center gap-2 border-t border-gray-500/10 pt-4">
                     <button
                       onClick={() => openEditForm(agent)}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cloudy/20 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-pampas"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-500/20 py-2 text-xs font-semibold text-gray-900 transition-colors hover:bg-gray-50"
                     >
                       <Edit3 className="h-3.5 w-3.5" /> Edit
                     </button>

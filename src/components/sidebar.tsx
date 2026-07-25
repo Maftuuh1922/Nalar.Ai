@@ -47,6 +47,13 @@ export function Sidebar() {
     chatSessionsApi.getAll(token).then(setSessions).catch(() => {});
   }, [token]);
 
+  // Listen for open-settings event
+  useEffect(() => {
+    const handleOpenSettings = () => setSettingsOpen(true);
+    window.addEventListener("open-settings", handleOpenSettings);
+    return () => window.removeEventListener("open-settings", handleOpenSettings);
+  }, []);
+
   // Close popup when clicking outside
   useEffect(() => {
     if (!menuOpen) return;
@@ -65,8 +72,8 @@ export function Sidebar() {
   if (collapsed) {
     return (
       <>
-        <aside className="hidden md:flex flex-col w-[70px] h-screen shrink-0 bg-transparent border-r border-black/5 items-center py-5 gap-2">
-          <button onClick={toggle} className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors mb-3">
+        <aside className="hidden md:flex flex-col w-[70px] h-screen shrink-0 bg-[#0011ff] border-r border-white/20 items-center py-5 gap-2">
+          <button onClick={toggle} className="p-2 rounded-none text-white/70 hover:text-white/80 hover:bg-[#0011ff] border border-transparent transition-colors mb-3">
             <PanelLeft className="h-4.5 w-4.5" />
           </button>
           
@@ -80,7 +87,7 @@ export function Sidebar() {
           <div className="mt-auto">
             <button 
               onClick={() => setSettingsOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#0011ff] text-white text-xs font-bold hover:scale-105 transition-transform shadow-md"
             >
               {initial}
             </button>
@@ -93,24 +100,24 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="hidden md:flex flex-col w-[260px] h-screen shrink-0 bg-transparent border-r border-black/5">
+      <aside className="hidden md:flex flex-col w-[260px] h-screen shrink-0 bg-[#0011ff] border-r border-white/20">
         
         {/* Header */}
         <div className="px-5 pt-6 pb-4 flex items-center justify-between shrink-0">
-          <Link href="/beranda" className="text-[22px] font-extrabold font-serif tracking-tight text-gray-900 hover:opacity-80 transition-opacity">
+          <Link href="/beranda" className="text-[22px] font-extrabold font-serif tracking-tight text-white hover:opacity-80 transition-opacity">
             Nalar AI.
           </Link>
           <div className="flex items-center gap-1">
             <button 
               onClick={() => setSearchOpen(!searchOpen)} 
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors"
+              className="p-1.5 rounded-none text-white/70 hover:text-white/80 hover:bg-[#0011ff] border border-transparent transition-colors"
               title="Cari"
             >
               <Search className="h-[17px] w-[17px]" />
             </button>
             <button 
               onClick={toggle} 
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors"
+              className="p-1.5 rounded-none text-white/70 hover:text-white/80 hover:bg-[#0011ff] border border-transparent transition-colors"
               title="Tutup sidebar"
             >
               <PanelLeftClose className="h-[17px] w-[17px]" />
@@ -121,18 +128,18 @@ export function Sidebar() {
         {/* Search Bar (collapsible) */}
         {searchOpen && (
           <div className="px-3 pb-3 shrink-0">
-            <div className="flex items-center gap-2 rounded-xl border border-black/8 bg-black/5 px-3 py-2 shadow-none">
-              <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+            <div className="flex items-center gap-2 rounded-none border border-white/20 bg-[#0011ff] border border-white/20 px-3 py-2 shadow-none">
+              <Search className="h-3.5 w-3.5 text-white/70 shrink-0" />
               <input 
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder={t("searchPlaceholder")}
                 autoFocus
-                className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-gray-400 text-gray-800"
+                className="flex-1 bg-[#0011ff] text-[13px] outline-none placeholder:text-white/70 text-white"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="text-gray-400 hover:text-gray-700">
+                <button onClick={() => setSearchQuery("")} className="text-white/70 hover:text-white/80">
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -144,7 +151,7 @@ export function Sidebar() {
         <div className="px-3 pb-3 shrink-0">
           <Link
             href="/beranda"
-            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl bg-gray-900 text-white text-[13.5px] font-semibold hover:bg-gray-800 transition-colors shadow-sm"
+            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-none bg-gray-900 text-white text-[13.5px] font-semibold hover:bg-gray-800 transition-colors shadow-none"
           >
             <Plus className="h-4 w-4" />
             <span>{t("newChat")}</span>
@@ -165,10 +172,10 @@ export function Sidebar() {
           {/* Riwayat */}
           <div className="mt-6 mb-4">
             <div className="px-2 mb-2 flex items-center justify-between">
-              <span className="text-[10.5px] text-gray-400 font-bold uppercase tracking-widest">{t("history")}</span>
+              <span className="text-[10.5px] text-white/70 font-bold uppercase tracking-widest">{t("history")}</span>
             </div>
             {filteredSessions.length === 0 ? (
-              <div className="px-2 py-3 text-xs text-gray-400 italic">
+              <div className="px-2 py-3 text-xs text-white/70 italic">
                 {searchQuery ? t("notFound") : t("noConversations")}
               </div>
             ) : (
@@ -178,17 +185,17 @@ export function Sidebar() {
                   return (
                     <div
                       key={session.id}
-                      className={`group relative flex items-center justify-between rounded-xl pr-1 transition-all duration-150 ${
+                      className={`group relative flex items-center justify-between rounded-none pr-1 transition-all duration-150 ${
                         isActive
-                          ? "bg-black/7 text-gray-900"
-                          : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
+                          ? "bg-[#0011ff] border border-transparent text-white"
+                          : "text-white/60 hover:text-white hover:bg-[#0011ff] border border-transparent"
                       }`}
                     >
                       <Link
                         href={`/beranda?s=${session.id}`}
                         className="flex items-center px-3 py-2 text-[13px] truncate flex-1 min-w-0"
                       >
-                        <span className={`truncate ${isActive ? "font-semibold text-gray-900" : "font-normal"}`}>
+                        <span className={`truncate ${isActive ? "font-semibold text-white" : "font-normal"}`}>
                           {session.title || t("newConversation")}
                         </span>
                       </Link>
@@ -196,20 +203,20 @@ export function Sidebar() {
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex shrink-0 items-center">
                         <Popover {...({ placement: "bottom-end", offset: 4 } as any)}>
                           <PopoverTrigger>
-                            <button className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors">
+                            <button className="p-1.5 rounded-none text-white/70 hover:text-white/80 hover:bg-[#0011ff] border border-transparent transition-colors">
                               <MoreHorizontal className="h-3.5 w-3.5" />
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="p-1 min-w-[150px] shadow-xl border border-gray-100 rounded-xl bg-white">
+                          <PopoverContent className="p-1 min-w-[150px] shadow-none border border-white/20 rounded-none bg-[#0011ff] border border-white/20">
                             <div className="flex flex-col w-full">
-                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-gray-50 rounded-lg text-gray-700 w-full text-left transition-colors">
-                                <Share2 className="h-3.5 w-3.5 text-gray-400" /> {t("share")}
+                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/5 rounded-none text-white/80 w-full text-left transition-colors">
+                                <Share2 className="h-3.5 w-3.5 text-white/70" /> {t("share")}
                               </button>
-                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-gray-50 rounded-lg text-gray-700 w-full text-left transition-colors">
-                                <PencilLine className="h-3.5 w-3.5 text-gray-400" /> {t("rename")}
+                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/5 rounded-none text-white/80 w-full text-left transition-colors">
+                                <PencilLine className="h-3.5 w-3.5 text-white/70" /> {t("rename")}
                               </button>
                               <div className="h-px bg-gray-100 my-1 mx-1"></div>
-                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-red-50 rounded-lg text-red-600 w-full text-left transition-colors">
+                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-red-50 rounded-none text-red-600 w-full text-left transition-colors">
                                 <Trash2 className="h-3.5 w-3.5 text-red-500" /> {t("delete")}
                               </button>
                             </div>
@@ -225,30 +232,30 @@ export function Sidebar() {
         </div>
 
         {/* User Bar - pinned to bottom */}
-        <div className="relative shrink-0 px-3 pb-4 pt-2 border-t border-black/5" onClick={(e) => e.stopPropagation()}>
+        <div className="relative shrink-0 px-3 pb-4 pt-2 border-t border-white/20" onClick={(e) => e.stopPropagation()}>
           {/* Popup Menu */}
           {menuOpen && (
-            <div className="absolute bottom-full left-3 right-3 mb-2 rounded-2xl border border-black/5 bg-white/90 backdrop-blur-xl p-2 shadow-xl shadow-black/5 z-50">
-              <div className="px-3 py-2.5 mb-1.5 rounded-xl bg-gray-50">
-                <span className="text-[10px] text-gray-400 block font-semibold uppercase tracking-wider">{t("signedInAs")}</span>
-                <span className="text-[13px] font-bold text-gray-900 truncate block mt-0.5">{user?.email}</span>
+            <div className="absolute bottom-full left-3 right-3 mb-2 rounded-none border border-white/20 bg-[#0011ff] backdrop-blur-xl p-2 shadow-none shadow-black/5 z-50">
+              <div className="px-3 py-2.5 mb-1.5 rounded-none bg-white/5">
+                <span className="text-[10px] text-white/70 block font-semibold uppercase tracking-wider">{t("signedInAs")}</span>
+                <span className="text-[13px] font-bold text-white truncate block mt-0.5">{user?.email}</span>
               </div>
               <button 
                 onClick={() => { setMenuOpen(false); setSettingsOpen(true); }}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors text-left w-full"
+                className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-white/80 hover:bg-white/5 transition-colors text-left w-full"
               >
-                <Settings className="h-4 w-4 text-gray-400" /> {t("settings")}
+                <Settings className="h-4 w-4 text-white/70" /> {t("settings")}
               </button>
-              <button className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors text-left w-full">
-                <Database className="h-4 w-4 text-gray-400" /> {t("memory")}
+              <button className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-white/80 hover:bg-white/5 transition-colors text-left w-full">
+                <Database className="h-4 w-4 text-white/70" /> {t("memory")}
               </button>
-              <button className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors text-left w-full">
-                <FileText className="h-4 w-4 text-gray-400" /> {t("knowledge")}
+              <button className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-white/80 hover:bg-white/5 transition-colors text-left w-full">
+                <FileText className="h-4 w-4 text-white/70" /> {t("knowledge")}
               </button>
-              <div className="my-1.5 h-px bg-black/5"></div>
+              <div className="my-1.5 h-px bg-[#0011ff] border border-white/20"></div>
               <button 
                 onClick={logout}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition-colors text-left w-full"
+                className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition-colors text-left w-full"
               >
                 <LogOut className="h-4 w-4 text-red-500" /> {t("logout")}
               </button>
@@ -258,18 +265,18 @@ export function Sidebar() {
           {/* User Button */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center justify-between w-full p-1.5 rounded-xl hover:bg-black/5 transition-colors group"
+            className="flex items-center justify-between w-full p-1.5 rounded-none hover:bg-[#0011ff] border border-transparent transition-colors group"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-[13px] font-bold shadow-sm group-hover:scale-105 transition-transform">
+              <div className="h-9 w-9 shrink-0 rounded-full bg-white text-[#0011ff] text-white flex items-center justify-center text-[13px] font-bold shadow-none group-hover:scale-105 transition-transform">
                 {initial}
               </div>
               <div className="flex flex-col items-start truncate min-w-0">
-                <span className="text-[13.5px] font-bold text-gray-900 truncate w-full">{username}</span>
-                <span className="text-[11px] font-medium text-gray-500">{t("freePlan")}</span>
+                <span className="text-[13.5px] font-bold text-white truncate w-full">{username}</span>
+                <span className="text-[11px] font-medium text-white/60">{t("freePlan")}</span>
               </div>
             </div>
-            <ChevronUp className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
+            <ChevronUp className={`h-4 w-4 text-white/70 shrink-0 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
           </button>
         </div>
       </aside>
@@ -284,15 +291,15 @@ function NavItem({ href, icon: Icon, label, isActive }: { href: string; icon: an
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-medium transition-all duration-200 ${
+      className={`flex items-center gap-3 rounded-none px-3 py-2.5 text-[13.5px] font-medium transition-all duration-200 border-b border-transparent ${
         isActive
-          ? "bg-black/7 text-gray-900 font-semibold"
-          : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
+          ? "bg-white text-[#0011ff] font-bold"
+          : "text-white/80 hover:text-white hover:border-white/50"
       }`}
     >
       <Icon 
-        strokeWidth={isActive ? 2.2 : 1.8} 
-        className={`h-[18px] w-[18px] shrink-0 ${isActive ? "text-gray-800" : "text-gray-400"}`} 
+        strokeWidth={isActive ? 2.5 : 1.8} 
+        className={`h-[18px] w-[18px] shrink-0 ${isActive ? "text-[#0011ff]" : "text-white/80"}`} 
       />
       {label}
     </Link>
@@ -304,13 +311,13 @@ function NavIconOnly({ href, icon: Icon, isActive, label }: { href: string; icon
     <Link
       href={href}
       title={label}
-      className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 ${
+      className={`flex h-11 w-11 items-center justify-center rounded-none transition-all duration-200 ${
         isActive
-          ? "bg-black/7 text-gray-900"
-          : "text-gray-400 hover:text-gray-700 hover:bg-black/5"
+          ? "bg-[#0011ff] border border-transparent text-white"
+          : "text-white/70 hover:text-white/80 hover:bg-[#0011ff] border border-transparent"
       }`}
     >
-      <Icon strokeWidth={isActive ? 2.2 : 1.8} className={`h-[18px] w-[18px] ${isActive ? "text-gray-800" : "text-gray-400"}`} />
+      <Icon strokeWidth={isActive ? 2.2 : 1.8} className={`h-[18px] w-[18px] ${isActive ? "text-white" : "text-white/70"}`} />
     </Link>
   );
 }

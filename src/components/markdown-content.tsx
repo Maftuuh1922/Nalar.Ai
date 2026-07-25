@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, Highlighter, X } from "lucide-react";
+import { DrawioViewer } from "./drawio-viewer";
 
 interface MarkdownContentProps {
   content: string;
@@ -49,57 +50,8 @@ const CodeBlock = React.memo(function CodeBlock({ children, className }: { child
 });
 
 /**
- * Splits a string by a set of highlight phrases and wraps each match
- * in a <mark> span — producing inline highlights directly in the text.
- */
-function applyInlineHighlights(text: string, highlights: string[]): React.ReactNode {
-  if (!highlights.length) return text;
-
-  // Build a regex that matches any of the highlighted phrases (case-insensitive)
-  const escaped = highlights.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
-
-  const parts = text.split(regex);
-  return parts.map((part, i) => {
-    const isMatch = highlights.some((h) => h.toLowerCase() === part.toLowerCase());
-    if (isMatch) {
-      return (
-        <mark
-          key={i}
-          className="bg-amber-300/90 text-amber-950 rounded-sm px-0.5 py-0 not-italic font-inherit border-b-2 border-amber-500/70"
-          style={{ backgroundColor: "#fde047cc" }}
-        >
-          {part}
-        </mark>
-      );
-    }
-    return part;
-  });
-}
-
-/**
- * Wraps all text nodes in a React.ReactNode tree with inline highlight marks.
- * This works recursively on any children passed to markdown elements.
- */
-function withHighlight(children: React.ReactNode, highlights: string[]): React.ReactNode {
-  if (!highlights.length) return children;
-  return React.Children.map(children, (child) => {
-    if (typeof child === "string") {
-      return applyInlineHighlights(child, highlights);
-    }
-    // isValidElement narrows child to ReactElement<unknown>, cast to any to access props safely
-    if (React.isValidElement<{ children?: React.ReactNode }>(child) && child.props.children) {
-      return React.cloneElement(child, {
-        children: withHighlight(child.props.children, highlights),
-      });
-    }
-    return child;
-  });
-}
-
-/**
  * Komponen pembaca Markdown berestetika & berperforma tinggi.
- * Stabilo menempel langsung pada teks inline — bukan panel terpisah.
+ * Stabilo menempel langsung pada teks inline menggunakan seleksi DOM asli.
  */
 export const MarkdownContent = React.memo(function MarkdownContent({
   content,
@@ -109,10 +61,10 @@ export const MarkdownContent = React.memo(function MarkdownContent({
 }: MarkdownContentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Array of manually highlighted phrases (selected by user with mouse)
-  const [manualHighlights, setManualHighlights] = useState<string[]>([]);
+  // Counter for highlights to show the "Hapus Semua" button
+  const [highlightCount, setHighlightCount] = useState(0);
   const [selectionTooltip, setSelectionTooltip] = useState<{
-    text: string;
+    range: Range | null;
     x: number;
     y: number;
   } | null>(null);
@@ -132,10 +84,10 @@ export const MarkdownContent = React.memo(function MarkdownContent({
     }
 
     if (containerRef.current && containerRef.current.contains(selection.anchorNode)) {
-      const range = selection.getRangeAt(0);
+      const range = selection.getRangeAt(0).cloneRange();
       const rect = range.getBoundingClientRect();
       setSelectionTooltip({
-        text: selectedText,
+        range,
         x: rect.left + rect.width / 2,
         y: rect.top - 44,
       });
@@ -143,23 +95,40 @@ export const MarkdownContent = React.memo(function MarkdownContent({
   }, []);
 
   const addManualHighlight = useCallback(() => {
-    if (selectionTooltip && !manualHighlights.includes(selectionTooltip.text)) {
-      setManualHighlights((prev) => [...prev, selectionTooltip.text]);
+    if (selectionTooltip?.range) {
+      try {
+        const range = selectionTooltip.range;
+        const mark = document.createElement("mark");
+        mark.className = "bg-amber-200/90 text-amber-950 rounded-sm px-0.5 py-0 not-italic font-inherit border-b-2 border-amber-400/80 manual-highlight";
+        mark.style.backgroundColor = "#fde047cc";
+        
+        // Extract contents and wrap in mark tag
+        const contents = range.extractContents();
+        mark.appendChild(contents);
+        range.insertNode(mark);
+        
+        setHighlightCount(prev => prev + 1);
+      } catch (e) {
+        console.warn("Could not highlight selection safely. Make sure you select text within a single paragraph.", e);
+      }
     }
     setSelectionTooltip(null);
     window.getSelection()?.removeAllRanges();
-  }, [selectionTooltip, manualHighlights]);
-
-  const removeHighlight = useCallback((term: string) => {
-    setManualHighlights((prev) => prev.filter((h) => h !== term));
-  }, []);
+  }, [selectionTooltip]);
 
   const clearManualHighlights = useCallback(() => {
-    setManualHighlights([]);
+    if (containerRef.current) {
+      const marks = containerRef.current.querySelectorAll("mark.manual-highlight");
+      marks.forEach(mark => {
+        const parent = mark.parentNode;
+        while (mark.firstChild) {
+          parent?.insertBefore(mark.firstChild, mark);
+        }
+        parent?.removeChild(mark);
+      });
+    }
+    setHighlightCount(0);
   }, []);
-
-  // Active highlights = manual ones (enableHighlight adds a visual cue but doesn't auto-highlight text)
-  const activeHighlights = manualHighlights;
 
   // Use native CSS classes from globals.css for reliable cross-browser justify
   const alignClass = textAlign === "justify" ? "is-justify" : "is-left";
@@ -173,23 +142,23 @@ export const MarkdownContent = React.memo(function MarkdownContent({
   const markdownComponents = useMemo(
     () => ({
       h1: ({ children }: any) => (
-        <h1 className="mt-7 mb-3.5 text-2xl font-bold border-b border-gray-200/80 pb-2.5 tracking-tight">
-          {withHighlight(children, activeHighlights)}
+        <h1 className="mt-7 mb-3.5 text-2xl font-serif font-bold border-b border-gray-300 pb-2.5 text-gray-900 tracking-tight">
+          {children}
         </h1>
       ),
       h2: ({ children }: any) => (
-        <h2 className="mt-6 mb-3 text-xl font-bold tracking-tight border-l-4 border-emerald-500 pl-3.5 py-0.5">
-          {withHighlight(children, activeHighlights)}
+        <h2 className="mt-6 mb-3 text-xl font-serif font-bold text-gray-800 tracking-tight">
+          {children}
         </h2>
       ),
       h3: ({ children }: any) => (
-        <h3 className="mt-4 mb-2 text-lg font-bold tracking-tight">
-          {withHighlight(children, activeHighlights)}
+        <h3 className="mt-4 mb-2 text-lg font-serif font-bold text-gray-800 tracking-tight">
+          {children}
         </h3>
       ),
       h4: ({ children }: any) => (
-        <h4 className="mt-3.5 mb-1.5 text-base font-bold">
-          {withHighlight(children, activeHighlights)}
+        <h4 className="mt-3.5 mb-1.5 text-base font-serif font-bold text-gray-800">
+          {children}
         </h4>
       ),
       p: ({ children }: any) => {
@@ -199,25 +168,25 @@ export const MarkdownContent = React.memo(function MarkdownContent({
         );
         if (hasBlockChild) {
           return (
-            <div className="my-3" style={justifyStyle}>
-              {withHighlight(children, activeHighlights)}
+            <div className="my-3 font-serif text-[15.5px] leading-relaxed text-gray-800" style={justifyStyle}>
+              {children}
             </div>
           );
         }
         return (
-          <p className="my-3" style={justifyStyle}>
-            {withHighlight(children, activeHighlights)}
+          <p className="my-3 font-serif text-[15.5px] leading-relaxed text-gray-800" style={justifyStyle}>
+            {children}
           </p>
         );
       },
       strong: ({ children }: any) => (
         <strong>
-          {withHighlight(children, activeHighlights)}
+          {children}
         </strong>
       ),
       em: ({ children }: any) => (
         <em>
-          {withHighlight(children, activeHighlights)}
+          {children}
         </em>
       ),
       ul: ({ children }: any) => (
@@ -231,16 +200,48 @@ export const MarkdownContent = React.memo(function MarkdownContent({
         </ol>
       ),
       li: ({ children }: any) => (
-        <li className="pl-1" style={justifyStyle}>
-          {withHighlight(children, activeHighlights)}
+        <li className="pl-1 font-serif text-[15.5px] leading-relaxed text-gray-800" style={justifyStyle}>
+          {children}
         </li>
       ),
       blockquote: ({ children }: any) => (
-        <blockquote className="my-4 border-l-4 border-emerald-500 bg-emerald-50/50 pl-4 py-3 pr-4 italic rounded-r-xl border-y border-r border-emerald-100/60 text-left text-opacity-80">
+        <blockquote className="my-5 border-l-4 border-gray-300 bg-gray-50/70 pl-5 py-3 pr-4 italic text-gray-700 font-serif text-[15.5px]">
           {children}
         </blockquote>
       ),
       hr: () => <hr className="my-6 border-t border-gray-200/80" />,
+      table: ({ children }: any) => (
+        <div className="overflow-x-auto w-full my-6">
+          <table className="w-full text-left border-collapse text-[14.5px] font-serif">
+            {children}
+          </table>
+        </div>
+      ),
+      thead: ({ children }: any) => (
+        <thead className="border-y-2 border-gray-900 bg-transparent text-gray-900">
+          {children}
+        </thead>
+      ),
+      tbody: ({ children }: any) => (
+        <tbody className="border-b-2 border-gray-900 bg-transparent divide-y divide-gray-200">
+          {children}
+        </tbody>
+      ),
+      tr: ({ children }: any) => (
+        <tr className="hover:bg-gray-50 transition-colors group">
+          {children}
+        </tr>
+      ),
+      th: ({ children }: any) => (
+        <th className="px-3 py-2.5 font-bold text-gray-900 tracking-wide text-[14px] align-bottom">
+          {children}
+        </th>
+      ),
+      td: ({ children }: any) => (
+        <td className="px-3 py-2.5 leading-relaxed text-gray-800 align-top">
+          {children}
+        </td>
+      ),
       code({ inline, className, children, ...props }: any) {
         if (inline) {
           return (
@@ -249,10 +250,32 @@ export const MarkdownContent = React.memo(function MarkdownContent({
             </code>
           );
         }
+        
+        const codeText = String(children).replace(/\n$/, "");
+        const language = className?.replace("language-", "") || "";
+        
+        // Render drawio xml visually (inline chat = readonly)
+        if (language === "drawio" || (language === "xml" && codeText.includes("<mxfile"))) {
+            return (
+              <button 
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-drawio-diagram', { detail: { xml: codeText } }));
+                }}
+                className="w-full my-4 border border-blue-200 bg-blue-50/50 hover:bg-blue-100/50 transition-colors px-4 py-3 rounded-xl flex items-center justify-center text-sm font-medium text-blue-700 font-sans shadow-sm cursor-pointer"
+              >
+                <svg className="h-4 w-4 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                </svg>
+                <span>Diagram Draw.io telah ditambahkan. <strong>Klik untuk membuka di Kanvas Samping</strong></span>
+              </button>
+            );
+        }
+        
         return <CodeBlock className={className}>{children}</CodeBlock>;
       },
     }),
-    [activeHighlights, justifyStyle]
+    [justifyStyle]
   );
 
   if (!content) return null;
@@ -281,31 +304,15 @@ export const MarkdownContent = React.memo(function MarkdownContent({
         </div>
       )}
 
-      {/* Active highlights chips — small pill badges below text, not above */}
-      {manualHighlights.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {manualHighlights.map((term, idx) => (
-            <span
-              key={idx}
-              className="inline-flex items-center gap-1 bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-300 group"
-            >
-              <Highlighter className="h-3 w-3 text-amber-600" />
-              <span className="max-w-[180px] truncate">{term}</span>
-              <button
-                type="button"
-                onClick={() => removeHighlight(term)}
-                className="ml-0.5 rounded-full p-0.5 hover:bg-amber-400/40 transition-colors"
-              >
-                <X className="h-2.5 w-2.5 text-amber-700" />
-              </button>
-            </span>
-          ))}
+      {/* Clear highlights button */}
+      {highlightCount > 0 && (
+        <div className="flex justify-end mb-2">
           <button
             type="button"
             onClick={clearManualHighlights}
-            className="text-[11px] text-amber-700 hover:text-amber-900 font-semibold underline px-1"
+            className="text-[11px] text-amber-700 hover:text-amber-900 font-semibold underline px-2 py-1 bg-amber-50/50 rounded-full"
           >
-            Hapus Semua
+            Hapus {highlightCount} Stabilo
           </button>
         </div>
       )}

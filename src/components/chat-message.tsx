@@ -18,6 +18,8 @@ import {
   X,
   Loader2,
   Paperclip,
+  Download,
+  Sparkles,
 } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown-content";
 import { useAuth } from "@/components/auth-provider";
@@ -45,6 +47,8 @@ export interface DisplayMessage {
   timestamp?: string;
   responseTimeMs?: number;
   attachedDocs?: { id: string; filename: string }[];
+  attachedImages?: string[];
+  suggestions?: string[];
 }
 
 interface ChatMessageProps {
@@ -78,6 +82,7 @@ export const ChatMessage = React.memo(function ChatMessage({
   const { token } = useAuth();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -132,6 +137,16 @@ export const ChatMessage = React.memo(function ChatMessage({
     setEditText(msg.content);
   }, [msg.content]);
 
+  const handleDownload = useCallback(() => {
+    const blob = new Blob([msg.content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `NalarAI_Response_${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [msg.content]);
+
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
@@ -167,6 +182,19 @@ export const ChatMessage = React.memo(function ChatMessage({
             <div className="flex flex-col items-end gap-1.5 max-w-[82%] group">
               {/* User Bubble */}
               <div className="bg-secondary text-secondary-foreground rounded-3xl px-5 py-3.5 text-[15px] leading-relaxed">
+                {msg.attachedImages && msg.attachedImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {msg.attachedImages.map((img, idx) => (
+                      <img 
+                        key={idx} 
+                        src={img} 
+                        alt={`Attached ${idx}`} 
+                        className="max-h-48 rounded-xl object-contain border border-white/20 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity" 
+                        onClick={() => setZoomedImage(img)}
+                      />
+                    ))}
+                  </div>
+                )}
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               </div>
 
@@ -244,7 +272,7 @@ export const ChatMessage = React.memo(function ChatMessage({
   // === ASSISTANT MESSAGE ===
   return (
     <div className="flex justify-start w-full">
-      <div className="w-full text-foreground py-3 px-1 group">
+      <div className="w-full text-gray-900 py-3 px-1 group">
         {/* Agent badge */}
         {msg.agentName && (
           <div className="mb-3 flex items-center gap-2">
@@ -261,9 +289,9 @@ export const ChatMessage = React.memo(function ChatMessage({
               <ChevronDown className="h-3 w-3 transition-transform group-open/think:rotate-180" />
             </summary>
             
-            <div className="relative mt-2 pl-7 text-gray-600/80 text-[11.5px] font-sans leading-relaxed space-y-2 bg-black/5 rounded-xl p-3 border border-gray-200/50">
+            <div className="relative mt-2 pl-7 text-gray-600 text-[11.5px] font-sans leading-relaxed space-y-2 bg-gray-50 rounded-xl p-3 border border-gray-100">
               {/* Left timeline line */}
-              <div className="absolute left-[18px] top-6 bottom-5 w-[1.5px] bg-gray-300"></div>
+              <div className="absolute left-[18px] top-6 bottom-5 w-[1.5px] bg-gray-200"></div>
               
               {/* Top icon (History/Clock) */}
               <div className="absolute left-3 top-3 bg-transparent">
@@ -274,8 +302,8 @@ export const ChatMessage = React.memo(function ChatMessage({
               
               {/* Bottom icon (Done) */}
               <div className="absolute left-3 bottom-2.5 bg-transparent">
-                <div className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 bg-transparent">
-                  <Check className="h-2.5 w-2.5 text-gray-500" strokeWidth={2.5} />
+                <div className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-transparent">
+                  <Check className="h-2.5 w-2.5 text-gray-400" strokeWidth={2.5} />
                 </div>
               </div>
               <div className="flex items-center gap-1 text-[11px] text-gray-500 font-medium pt-1">
@@ -315,12 +343,12 @@ export const ChatMessage = React.memo(function ChatMessage({
             <button
               type="button"
               onClick={handleCopy}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="flex items-center gap-1.5 rounded-none border border-gray-200 bg-white shadow-sm px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50 hover:text-blue-600 rounded-xl transition-colors"
             >
               {copied ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="font-bold text-emerald-700">Tersalin</span>
+                  <Check className="h-3.5 w-3.5 text-blue-600" />
+                  <span className="font-bold text-blue-600">Tersalin</span>
                 </>
               ) : (
                 <>
@@ -335,10 +363,20 @@ export const ChatMessage = React.memo(function ChatMessage({
               type="button"
               onClick={onRegenerate}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-none border border-gray-200 bg-white shadow-sm px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50 hover:text-blue-600 rounded-xl transition-colors disabled:opacity-50"
             >
               <RotateCcw className="h-3.5 w-3.5 text-gray-500" />
               <span>Ulangi</span>
+            </button>
+
+            {/* Export / Download */}
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="flex items-center gap-1.5 rounded-none border border-gray-200 bg-white shadow-sm px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50 hover:text-blue-600 rounded-xl transition-colors"
+            >
+              <Download className="h-3.5 w-3.5 text-gray-500" />
+              <span>Ekspor</span>
             </button>
 
             {/* Stabilo */}
@@ -354,8 +392,44 @@ export const ChatMessage = React.memo(function ChatMessage({
               <Highlighter className={`h-3.5 w-3.5 ${highlighted ? "text-amber-600 fill-amber-400" : "text-gray-500"}`} />
               <span>{highlighted ? "Stabilo Aktif" : "Stabilo Kuning"}</span>
             </button>
+          </div>
+          
+          {/* Sisi kanan baris aksi (untuk tombol yang lain jika ada) */}
+          <div className="flex items-center">
+            {/* Ruang kosong jika diperlukan untuk tombol tambahan di ujung kanan */}
+          </div>
+        </div>
+        
+        {/* Saran Pertanyaan (Suggestions) */}
+        {msg.suggestions && msg.suggestions.length > 0 && (
+          <div className="mt-4 pt-4 flex flex-col gap-2 border-t border-gray-100 border-dashed">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-500" /> Saran Lanjutan
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {msg.suggestions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    const input = document.querySelector('textarea[name="chat-input"]') as HTMLTextAreaElement;
+                    if (input) {
+                      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                      nativeInputValueSetter?.call(input, suggestion);
+                      input.dispatchEvent(new Event("input", { bubbles: true }));
+                      input.focus();
+                    }
+                  }}
+                  className="px-3.5 py-1.5 bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-700 border border-gray-200 hover:border-blue-200 text-xs rounded-full transition-colors font-medium shadow-sm"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-            {/* Sumber Rujukan Dropdown Button */}
+        {/* Sumber Rujukan Dropdown Button (Pindah ke bawah jika diinginkan, atau biarkan di atas. Kita biarkan di posisinya) */}
             {msg.sources && msg.sources.length > 0 && (
               <Popover {...({ placement: "top-start", showArrow: true, offset: 8, backdrop: "transparent" } as any)}>
                 <PopoverTrigger>
@@ -403,7 +477,6 @@ export const ChatMessage = React.memo(function ChatMessage({
                 </PopoverContent>
               </Popover>
             )}
-          </div>
 
           {/* Time & token info */}
           <div className="flex items-center gap-2.5 text-[11px] font-medium text-gray-500">
@@ -427,7 +500,6 @@ export const ChatMessage = React.memo(function ChatMessage({
             )}
           </div>
         </div>
-      </div>
 
       {/* Floating Source Detail Panel */}
       {selectedSource && (
@@ -507,6 +579,30 @@ export const ChatMessage = React.memo(function ChatMessage({
             </div>
           </div>
         </>
+      )}
+
+      {/* Image Lightbox Modal */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button 
+            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/20 hover:bg-black/40 rounded-full transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoomedImage(null);
+            }}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img 
+            src={zoomedImage} 
+            alt="Zoomed attachment" 
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );

@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen overflow-hidden bg-[#0011ff] text-white selection:bg-white selection:text-[#0011ff]">
         <Sidebar />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>

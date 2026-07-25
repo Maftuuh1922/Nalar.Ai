@@ -1,400 +1,314 @@
+"use client";
+
 import Link from "next/link";
-import Image from "next/image";
-import { Play, CheckCircle2, FileText, Send, BookOpen, BrainCircuit, Check, ArrowRight } from "lucide-react";
+import { Copy, Terminal, ChevronRight, Download, ExternalLink, BookOpen, BrainCircuit, FileText, MessageSquare, Zap, Shield, Globe } from "lucide-react";
+import { motion } from "framer-motion";
+import TextType from '@/components/TextType';
+import ScrambledText from '@/components/ScrambledText';
+import VariableProximity from '@/components/VariableProximity';
+import PillNav from '@/components/PillNav';
+import Dither from '@/components/Dither';
+import { useEffect, useState, useRef } from "react";
 
 export default function LandingPage() {
+  const [mounted, setMounted] = useState(false);
+  const containerRef = useRef(null);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
   return (
-    <div className="flex min-h-screen flex-col bg-[#FAF9F5] font-sans text-gray-900">
-      {/* Navbar - Static, not sticky to avoid screenshot/layout glitches */}
-      <header className="relative z-50 border-b border-gray-200 bg-[#FAF9F5] px-6 py-5">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-serif text-2xl font-bold tracking-tight text-gray-900">Nalar AI.</span>
-          </div>
-          <div className="flex items-center gap-6">
-            <Link href="/login" className="text-sm font-semibold hover:text-gray-600 transition-colors">
-              Masuk
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-full bg-gray-900 px-6 py-2.5 text-sm font-bold text-white transition-all hover:bg-gray-800"
+    <div className="min-h-screen bg-[#0011ff] text-white font-sans selection:bg-white selection:text-[#0011ff] overflow-x-hidden">
+      
+      {/* NAVBAR */}
+      <nav className="w-full px-6 py-8 flex items-center justify-between max-w-[1400px] mx-auto relative z-50">
+        
+        {/* LOGO ON THE LEFT */}
+        <div>
+           <div className="font-serif font-bold text-2xl md:text-3xl leading-[0.9] text-left tracking-tight text-white hover:opacity-80 transition-opacity cursor-pointer">
+              NALAR<br/>AI
+           </div>
+        </div>
+
+        {/* PILL NAV ON THE RIGHT */}
+        <div>
+           <PillNav
+              items={[
+                 { label: 'Tentang', href: '#' },
+                 { label: 'Docs', href: '#' },
+                 { label: 'Mulai', href: '/login' }
+              ]}
+              className="custom-nav"
+              ease="power2.easeOut"
+              baseColor="#ffffff"
+              pillColor="#0011ff"
+              hoveredPillTextColor="#0011ff"
+              pillTextColor="#ffffff"
+           />
+        </div>
+
+      </nav>
+
+      {/* HERO SECTION */}
+      <section className="px-6 pt-20 pb-32 max-w-[1400px] mx-auto relative z-20 flex min-h-[85vh] items-center">
+         
+         {/* HERO ILLUSTRATION (Absolute Right Bleed) */}
+         <div className="absolute top-12 md:-top-24 -right-[20%] md:-right-[10%] w-[120%] md:w-[900px] aspect-square opacity-90 mix-blend-screen z-10 pointer-events-none flex items-center justify-center">
+            <div className="w-full h-full bg-[url('/images/hero_illustration.png')] bg-contain bg-center bg-no-repeat" />
+         </div>
+
+         {/* HERO CONTENT */}
+         <div className="flex flex-col max-w-4xl relative z-20">
+            <div className="overflow-hidden mb-8">
+               <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }} className="font-mono text-[10px] uppercase tracking-widest opacity-80 border-l border-white pl-4">
+                  DIPERCAYA RIBUAN PELAJAR & PENELITI
+               </motion.div>
+            </div>
+            
+            <ScrambledText
+               className="font-serif text-[3.5rem] sm:text-6xl md:text-[6rem] lg:text-[7.5rem] leading-[0.85] font-bold uppercase tracking-tighter mb-16 flex flex-col min-h-[200px] sm:min-h-[250px] md:min-h-[350px] lg:min-h-[450px]"
+               radius={150}
+               duration={1.5}
+               speed={0.6}
+               scrambleChars="."
             >
-              Mulai Sekarang
-            </Link>
-          </div>
-        </div>
-      </header>
+               KECERDASAN<br/>YANG<br/>BEREVOLUSI<br/>UNTUK ANDA
+            </ScrambledText>
 
-      <main className="flex-1 overflow-hidden">
-        {/* Section 1: Hero */}
-        <section className="relative px-6 pb-20 pt-16 lg:pt-24">
-          <div className="mx-auto max-w-7xl">
-            <div className="grid gap-16 lg:grid-cols-12 items-center">
-              {/* Left Column: Copy */}
-              <div className="lg:col-span-5 relative z-10">
-                <div className="mb-6 font-semibold uppercase tracking-widest text-[10px] text-gray-500">
-                  AI Tutor Berbasis Dokumen
-                </div>
-                <h1 className="mb-6 font-serif text-[3.5rem] md:text-[4rem] lg:text-[4.5rem] font-medium leading-[1.05] tracking-tight text-gray-900">
-                  Belajar Apapun Dari Dokumen Anda.
-                </h1>
-                <p className="mb-10 text-lg leading-relaxed text-gray-600">
-                  Nalar AI adalah AI Agent yang mengekstrak informasi, membuat ringkasan, dan menguji pemahaman dari dokumen PDF atau materi kuliah Anda sendiri.
-                </p>
-                <div className="flex flex-col gap-4 sm:flex-row">
-                  <Link
-                    href="/register"
-                    className="flex items-center justify-center rounded-full bg-gray-900 px-8 py-4 text-sm font-bold text-white transition-all hover:bg-gray-800"
-                  >
-                    Mulai Sekarang
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.8 }} className="grid sm:grid-cols-2 gap-12 max-w-2xl">
+               <div>
+                  <div className="font-mono text-[10px] uppercase tracking-widest mb-4 opacity-70">MULAI SEKARANG</div>
+                  <Link href="/register" className="inline-flex items-center justify-center bg-white text-[#0011ff] font-serif font-bold text-lg px-8 py-4 hover:bg-gray-200 transition-colors uppercase w-full">
+                     Coba Nalar Gratis
                   </Link>
-                  <Link
-                    href="#demo"
-                    className="flex items-center justify-center rounded-full border border-gray-300 bg-white px-8 py-4 text-sm font-bold text-gray-900 transition-all hover:bg-gray-50"
-                  >
-                    Lihat Demo
-                  </Link>
-                </div>
-              </div>
+               </div>
+               
+               <div>
+                  <div className="font-mono text-[10px] uppercase tracking-widest mb-4 opacity-70">AKSES CEPAT</div>
+                  <div className="bg-white text-[#111] p-1.5 flex items-center justify-between font-mono text-sm w-full font-bold">
+                     <span className="px-3">nalar.ai/upload</span>
+                     <button className="bg-gray-200 hover:bg-gray-300 p-2 transition-colors text-[#0011ff]">
+                        <Copy className="w-4 h-4" />
+                     </button>
+                  </div>
+                  <div className="flex gap-4 mt-4 font-mono text-[10px] uppercase tracking-widest opacity-70">
+                     <Link href="#" className="hover:underline">Upload Dokumen</Link>
+                     <Link href="#" className="hover:underline">Ekstensi Browser</Link>
+                  </div>
+               </div>
+            </motion.div>
+         </div>
+      </section>
 
-              {/* Right Column: Visual */}
-              <div className="lg:col-span-7 relative z-0 mt-8 lg:mt-0">
-                <div className="relative w-full max-w-[800px] mx-auto lg:ml-auto">
-                  {/* Background Image */}
-                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl shadow-lg">
-                    <Image
-                      src="/hero_landscape.png"
-                      alt="Landscape painting"
-                      fill
-                      sizes="(max-width: 768px) 100vw, 800px"
-                      className="object-cover"
-                      priority
-                    />
-                  </div>
-                  
-                  {/* Embedded UI Mockup - Positioned cleanly over the bottom left */}
-                  <div className="absolute -bottom-8 -left-4 sm:-left-12 w-[90%] sm:w-[450px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl flex flex-col">
-                    <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <div className="h-2.5 w-2.5 rounded-full bg-gray-300"></div>
-                        <div className="h-2.5 w-2.5 rounded-full bg-gray-300"></div>
-                        <div className="h-2.5 w-2.5 rounded-full bg-gray-300"></div>
-                      </div>
-                    </div>
-                    <div className="p-5 flex flex-col gap-5">
-                      <div className="flex justify-end">
-                        <div className="rounded-2xl rounded-tr-sm bg-gray-900 px-4 py-3 text-sm text-white max-w-[85%] shadow-sm">
-                          Apa inti dari paper ini?
-                        </div>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 font-bold text-gray-700 text-xs">AI</div>
-                        <div className="space-y-3">
-                          <p className="text-sm leading-relaxed text-gray-800">
-                            Paper ini membahas metode efisien dalam Machine Learning.
-                          </p>
-                          <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600">
-                            <FileText className="h-3 w-3 text-gray-400" />
-                            Hal 2: "Our novel approach..."
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+      {/* PRODUCT PREVIEW */}
+      <section className="px-6 py-32 w-full flex justify-center relative border-y border-white/20 bg-black/20 overflow-hidden">
+         {/* Impressionist Artwork Background */}
+         <div className="absolute inset-0 opacity-40 bg-[url('/images/product_preview_background.png')] bg-cover bg-center blur-md mix-blend-luminosity"></div>
+         
+         <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.98 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+            className="relative z-10 w-full max-w-5xl rounded-xl overflow-hidden shadow-2xl border border-white/20 bg-black/80 backdrop-blur-xl"
+         >
+            {/* Browser Header */}
+            <div className="bg-[#1e1e1e] px-4 py-3 flex items-center gap-2 border-b border-white/10">
+               <div className="flex gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+               </div>
+               <div className="mx-auto bg-black/50 text-white/50 font-mono text-xs px-6 py-1.5 rounded text-center border border-white/5">nalar.ai/app</div>
             </div>
-          </div>
-        </section>
-
-        {/* Section 2: Value Props */}
-        <section className="border-t border-gray-200 py-12 text-center">
-          <p className="mb-6 text-xs font-bold uppercase tracking-widest text-gray-400">Nilai Inti Nalar AI</p>
-          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-12 gap-y-6 px-6 font-serif text-xl font-medium text-gray-800 opacity-80">
-            <span>Gratis Dipakai</span>
-            <span>Model AI Bebas Pilih</span>
-            <span>100% Data Privat</span>
-          </div>
-        </section>
-
-        {/* Section 3: 3 Columns Features (Clean, Minimalist Mockups) */}
-        <section className="px-6 py-24">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-20 text-center max-w-3xl mx-auto">
-              <h2 className="font-serif text-4xl md:text-5xl font-medium tracking-tight text-gray-900">
-                Pengalaman belajar yang lebih baik untuk siapa saja
-              </h2>
+            {/* Mockup Body */}
+            <div className="aspect-[16/10] md:aspect-video bg-[#0c0c0c] flex p-6 gap-6 relative">
+               <div className="hidden md:block w-1/3 bg-white/5 rounded border border-white/10 p-5 font-mono text-xs text-white/60 leading-relaxed">
+                  # DOKUMEN_AKTIF<br/><br/>
+                  &gt; Analisis_Inflasi_2024.pdf<br/>
+                  <span className="text-green-400 pl-4">Terindeks (124 hal)</span><br/><br/>
+                  &gt; Jurnal_Ekonomi_Makro.pdf<br/>
+                  <span className="text-green-400 pl-4">Terindeks (45 hal)</span><br/><br/>
+                  <br/>
+                  [+] UPLOAD BARU
+               </div>
+               <div className="flex-1 flex flex-col gap-4">
+                  <div className="flex-1 bg-white/5 rounded border border-white/10 p-5 font-mono text-sm overflow-hidden flex flex-col gap-4">
+                     <div className="text-white/40 mb-2 border-b border-white/10 pb-2 border-dashed">
+                        USER_QUERY &gt; Apa definisi inflasi menurut jurnal?
+                     </div>
+                     <div className="text-white leading-relaxed">
+                        NALAR &gt; Menurut Jurnal Ekonomi Makro (Hal 24), inflasi adalah kenaikan harga barang dan jasa secara umum dan terus menerus dalam jangka waktu tertentu.<br/><br/>
+                        <span className="bg-white/10 px-2 py-1 text-xs rounded text-blue-300 border border-white/10">Sitasi: [Jurnal_Ekonomi_Makro.pdf, Hal 24]</span>
+                     </div>
+                  </div>
+                  <div className="h-14 bg-white/10 rounded border border-white/20 flex items-center px-4 font-mono text-xs text-white/40">
+                     <Terminal className="w-4 h-4 mr-2" />
+                     Tanya Nalar tentang dokumen ini...
+                  </div>
+               </div>
             </div>
+         </motion.div>
+      </section>
 
-            <div className="grid gap-12 md:grid-cols-3 items-start">
-              {/* Feature 1 */}
-              <div>
-                <div className="aspect-[4/3] rounded-2xl bg-white border border-gray-200 shadow-sm mb-6 p-8 flex flex-col justify-center items-center">
-                  <div className="w-full max-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
-                    <div className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Sitasi Otomatis</div>
-                    <p className="text-sm text-gray-900 leading-relaxed font-medium">"...pembelahan sel terjadi pada fase mitotik."</p>
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 font-medium">
-                      <BookOpen className="h-3 w-3 text-gray-400" /> Hal. 14
-                    </div>
+      {/* AUDIENCE CARDS */}
+      <section className="w-full border-b border-white/20 bg-[#0011ff] relative overflow-hidden">
+         {/* Background Texture (Spans across all cards) */}
+         <div className="absolute inset-0 bg-[url('/images/hero_illustration.png')] bg-cover bg-center bg-no-repeat opacity-20 mix-blend-screen pointer-events-none z-0"></div>
+
+         <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={{
+               hidden: { opacity: 0 },
+               visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+            }}
+            className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/20 relative z-10"
+         >
+            {[
+               { label: "UNTUK", title: "MAHASISWA", cta: "MULAI" },
+               { label: "UNTUK", title: "PENELITI", cta: "MULAI" },
+               { label: "UNTUK", title: "TIM & PERUSAHAAN", cta: "HUBUNGI KAMI" }
+            ].map((card, i) => (
+               <motion.div variants={{ hidden: { opacity: 0, y: 50 }, visible: { opacity: 1, y: 0 } }} key={i} className="p-16 lg:p-24 hover:bg-white/5 backdrop-blur-[2px] transition-colors flex flex-col items-center text-center group cursor-pointer relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="font-mono text-[10px] uppercase tracking-widest mb-6 opacity-70 relative z-10">{card.label}</div>
+                  <h3 className="font-serif text-4xl md:text-5xl font-bold uppercase mb-16 tracking-tight relative z-10">{card.title}</h3>
+                  <div className="bg-white text-[#0011ff] font-mono text-xs px-6 py-2.5 uppercase font-bold group-hover:scale-110 transition-transform flex items-center gap-2 relative z-10">
+                     <Download className="w-3 h-3" /> {card.cta}
                   </div>
-                </div>
-                <h3 className="mb-3 font-semibold text-lg text-gray-900">Pemahaman instan</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Tanya apapun tentang dokumen Anda, dapatkan jawaban akurat dalam hitungan detik yang dilengkapi dengan referensi halaman sumber.
-                </p>
-              </div>
+               </motion.div>
+            ))}
+         </motion.div>
+      </section>
 
-              {/* Feature 2 */}
-              <div>
-                <div className="aspect-[4/3] rounded-2xl bg-white border border-gray-200 shadow-sm mb-6 p-8 flex flex-col justify-center items-center">
-                  <div className="w-full max-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
-                    <div className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Latihan Soal</div>
-                    <p className="text-sm font-bold text-gray-900 mb-3">Pusat tata surya adalah?</p>
-                    <div className="space-y-2">
-                      <div className="rounded border border-gray-200 px-3 py-1.5 text-xs text-gray-500">A. Bumi</div>
-                      <div className="rounded border border-gray-900 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-900 flex justify-between items-center">
-                        B. Matahari <Check className="h-3.5 w-3.5" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <h3 className="mb-3 font-semibold text-lg text-gray-900">Latihan yang lebih kuat</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Uji pengetahuan Anda. Nalar AI otomatis men-generate kuis pilihan ganda langsung dari materi bacaan yang Anda unggah.
-                </p>
-              </div>
-
-              {/* Feature 3 */}
-              <div>
-                <div className="aspect-[4/3] rounded-2xl bg-white border border-gray-200 shadow-sm mb-6 p-8 flex flex-col justify-center items-center">
-                   <div className="w-full max-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
-                    <div className="mb-3 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Kebebasan Model</div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between rounded border border-gray-900 bg-gray-50 p-2.5 text-xs">
-                        <span className="font-semibold text-gray-900">GPT-4o</span>
-                        <span className="rounded bg-gray-900 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">Aktif</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded border border-gray-200 p-2.5 text-xs opacity-60">
-                        <span className="font-medium text-gray-500">Llama 3 (Lokal)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <h3 className="mb-3 font-semibold text-lg text-gray-900">Kebebasan penuh</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Anda tidak dikunci pada satu AI. Gunakan API favorit seperti OpenAI, atau jalankan model lokal offline untuk 100% privasi.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 4: Honest Comparison Table */}
-        <section className="px-6 py-20">
-          <div className="mx-auto max-w-4xl bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-gray-200">
-            <div className="text-center mb-10">
-              <h2 className="mb-4 font-serif text-3xl font-medium tracking-tight text-gray-900">Lebih dari sekadar chatbot.</h2>
-              <p className="text-gray-600 text-sm">Perbedaan utama AI Tutor berbasis dokumen dengan chatbot umum.</p>
+      {/* FEATURE GRID */}
+      <section className="bg-white text-[#0011ff] py-32 px-6 border-b border-white/20">
+         <div className="max-w-[1400px] mx-auto">
+            <div className="flex justify-end mb-24">
+               <div className="font-mono text-[10px] uppercase tracking-widest border border-[#0011ff] px-4 py-1.5 font-bold">FITUR UTAMA</div>
             </div>
             
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="pb-4 font-bold text-gray-900 w-1/2">Kemampuan</th>
-                    <th className="pb-4 font-bold text-gray-500 text-center w-1/4">Chatbot Biasa</th>
-                    <th className="pb-4 font-bold text-gray-900 text-center w-1/4 bg-gray-50 rounded-t-lg">Nalar AI</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  <tr>
-                    <td className="py-4 font-medium text-gray-800">Jawaban bersumber murni dari dokumen Anda</td>
-                    <td className="py-4 text-center text-gray-300">-</td>
-                    <td className="py-4 text-center text-gray-900 font-bold text-lg bg-gray-50">✓</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 font-medium text-gray-800">Sitasi presisi dengan nomor halaman</td>
-                    <td className="py-4 text-center text-gray-300">-</td>
-                    <td className="py-4 text-center text-gray-900 font-bold text-lg bg-gray-50">✓</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 font-medium text-gray-800">Generate latihan soal otomatis</td>
-                    <td className="py-4 text-center text-gray-300">-</td>
-                    <td className="py-4 text-center text-gray-900 font-bold text-lg bg-gray-50">✓</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 font-medium text-gray-800">Personalisasi Asisten (My Agents)</td>
-                    <td className="py-4 text-center text-gray-300">-</td>
-                    <td className="py-4 text-center text-gray-900 font-bold text-lg bg-gray-50">✓</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 font-medium text-gray-800">Dukungan model lokal (Offline & Privat)</td>
-                    <td className="py-4 text-center text-gray-300">-</td>
-                    <td className="py-4 text-center text-gray-900 font-bold text-lg bg-gray-50 rounded-b-lg">✓</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+            <motion.div 
+               initial="hidden"
+               whileInView="visible"
+               viewport={{ once: true, margin: "-100px" }}
+               variants={{
+                  hidden: { opacity: 0 },
+                  visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+               }}
+               className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-16 gap-y-24"
+            >
+               {[
+                  { num: "#1 RINGKAS", title: "RINGKASAN\nINSTAN", desc: "Ekstrak inti dari ratusan halaman dalam hitungan detik.", img: "feature_1", icon: FileText },
+                  { num: "#2 TANYA", title: "TANYA JAWAB\nKONTEKSTUAL", desc: "Tanyakan apa saja tentang dokumen Anda, dapat jawaban akurat.", img: "feature_2", icon: MessageSquare },
+                  { num: "#3 UJI", title: "KUIS\nOTOMATIS", desc: "Uji pemahaman Anda dengan kuis dari isi dokumen.", img: "feature_3", icon: Zap },
+                  { num: "#4 FORMAT", title: "MULTI-\nFORMAT", desc: "Dukungan PDF, slide, dan format dokumen umum lainnya.", img: "feature_4", icon: BookOpen },
+                  { num: "#5 AMAN", title: "KEAMANAN\nDATA", desc: "Dokumen Anda diproses secara aman dan privat.", img: "feature_5", icon: Shield },
+                  { num: "#6 SAMBUNG", title: "TERINTEGRASI", desc: "Sambungkan dengan tools belajar/kerja yang sudah dipakai.", img: "feature_6", icon: Globe }
+               ].map((feat, i) => (
+                  <motion.div variants={{ hidden: { opacity: 0, y: 50 }, visible: { opacity: 1, y: 0 } }} key={i} className="flex flex-col group">
+                     <div className="font-mono text-[10px] uppercase tracking-widest mb-6 border-b border-[#0011ff]/20 pb-4">{feat.num}</div>
+                     <h3 className="font-serif text-4xl font-bold uppercase whitespace-pre-line mb-8 leading-[0.9] group-hover:opacity-70 transition-opacity tracking-tight">
+                        {feat.title}
+                     </h3>
+                     <div className="w-full aspect-square mb-8 bg-black/5 border border-[#0011ff]/10 relative overflow-hidden flex items-center justify-center transition-colors">
+                        {/* Background image loaded via inline style since Tailwind cannot parse dynamic URLs */}
+                        <div 
+                           className="absolute inset-0 bg-cover bg-center bg-no-repeat mix-blend-multiply opacity-100 z-10" 
+                           style={{ backgroundImage: `url('/images/${feat.img}.png')` }}
+                        ></div>
+                        
+                        {/* Elegant Fallback Icon */}
+                        <feat.icon className="w-1/3 h-1/3 text-[#0011ff]/10 group-hover:text-[#0011ff]/20 transition-colors duration-500 relative z-0" strokeWidth={0.5} />
+                     </div>
+                     <p className="font-mono text-xs uppercase leading-relaxed opacity-80 border-l border-[#0011ff] pl-4">
+                        {feat.desc}
+                     </p>
+                  </motion.div>
+               ))}
+            </motion.div>
+         </div>
+      </section>
 
-        {/* Section 5: Segmen Pengguna */}
-        <section className="px-6 py-24 border-t border-gray-200">
-          <div className="mx-auto max-w-6xl">
-            {/* Segmen 1: Pelajar */}
-            <div className="mb-40 flex flex-col items-center">
-              <div className="text-center max-w-2xl mb-12">
-                <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Untuk Pelajar</div>
-                <h2 className="mb-6 font-serif text-4xl md:text-5xl font-medium tracking-tight text-gray-900">
-                  Pahami materi kuliah lebih cepat
-                </h2>
-                <p className="text-lg text-gray-600">
-                  Upload slide, modul, atau catatan kuliah. Tanyakan konsep yang membingungkan kapan saja tanpa harus membaca ratusan halaman.
-                </p>
-              </div>
-              
-              <div className="relative w-full aspect-[2/1] max-w-5xl overflow-hidden rounded-2xl shadow-lg border border-gray-200">
-                <Image src="/segment_pelajar.png" alt="Ladang" fill sizes="100vw" className="object-cover" />
-                
-                {/* Mockup Overlay */}
-                <div className="absolute inset-x-0 bottom-0 mx-auto w-[90%] max-w-lg translate-y-2 rounded-t-xl bg-white p-6 shadow-2xl border-x border-t border-gray-200 flex flex-col gap-4">
-                   <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
-                    <FileText className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <div className="text-sm font-bold text-gray-900">Biologi_Sel.pdf</div>
-                      <div className="text-xs text-gray-500">12 Halaman</div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-gray-100 px-4 py-3 text-sm font-medium text-gray-900 text-center">
-                    "Bedanya mitosis dan meiosis?"
-                  </div>
-                  <div className="rounded-lg bg-gray-900 text-white px-4 py-3 text-sm shadow-sm text-center">
-                    Mitosis menghasilkan sel anak identik. Meiosis untuk reproduksi.
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* GIANT WORDMARK */}
+      <section className="bg-white text-[#0011ff] pt-32 pb-12 overflow-hidden relative border-b border-[#0011ff]/10">
 
-            {/* Segmen 2: Peneliti */}
-            <div className="mb-40 flex flex-col items-center">
-              <div className="text-center max-w-2xl mb-12">
-                <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Untuk Peneliti</div>
-                <h2 className="mb-6 font-serif text-4xl md:text-5xl font-medium tracking-tight text-gray-900">
-                  AI-first tools for more efficient research
-                </h2>
-                <p className="text-lg text-gray-600">
-                  Upload paper jurnal, ekstrak poin penting, dan telusuri metodologi tanpa perlu membolak-balik halaman secara manual.
-                </p>
-              </div>
-              
-              <div className="relative w-full aspect-[2.5/1] max-w-6xl overflow-hidden rounded-2xl shadow-lg border border-gray-200 mb-12">
-                <Image src="/segment_peneliti.png" alt="Hutan" fill sizes="100vw" className="object-cover" />
-                
-                {/* Overlay Mockup */}
-                <div className="absolute bottom-0 inset-x-4 sm:inset-x-8 rounded-t-xl bg-white border-x border-t border-gray-200 p-4 shadow-2xl grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <div className="flex items-center justify-between rounded bg-gray-50 p-3 border border-gray-100">
-                      <span className="text-xs font-bold text-gray-800 truncate pr-2">Attention_Is_All_You_Need.pdf</span>
-                      <span className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">Indexed</span>
-                   </div>
-                   <div className="flex items-center justify-between rounded bg-gray-50 p-3 border border-gray-100">
-                      <span className="text-xs font-bold text-gray-800 truncate pr-2">Llama_3_Architecture.pdf</span>
-                      <span className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">Indexed</span>
-                   </div>
-                </div>
-              </div>
+         <div className="w-full flex justify-center items-end leading-[0.72] font-serif font-black tracking-tighter text-[26vw] uppercase select-none overflow-hidden">
+            <motion.div 
+               initial={{ y: "100%" }}
+               whileInView={{ y: 0 }}
+               viewport={{ once: true, margin: "-50px" }}
+               transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+               NALAR
+            </motion.div>
+         </div>
+      </section>
 
-              {/* 3 Text Columns Below Image */}
-              <div className="grid md:grid-cols-3 gap-8 w-full max-w-5xl text-left">
-                <div>
-                  <h4 className="font-semibold text-gray-900 text-sm mb-2">Multi-Document Analysis</h4>
-                  <p className="text-xs text-gray-600 leading-relaxed">Tanyakan satu pertanyaan, dan Nalar AI akan mencari jawabannya di seluruh library paper yang Anda unggah.</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 text-sm mb-2">The AI Copilot</h4>
-                  <p className="text-xs text-gray-600 leading-relaxed">Asisten virtual yang memahami konteks teknis dari jurnal-jurnal ilmiah terbaru.</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 text-sm mb-2">Secure & Private</h4>
-                  <p className="text-xs text-gray-600 leading-relaxed">Gunakan model LLM lokal via Ollama untuk memastikan data riset Anda yang belum dipublikasi tetap aman.</p>
-                </div>
-              </div>
+      {/* CLOSING CTA */}
+      <section className="relative px-6 py-32 text-center border-t border-white/20 overflow-hidden min-h-[60vh] flex flex-col justify-center">
+         
+         {/* Dither Background */}
+         <div className="absolute inset-0 w-full h-full z-0 pointer-events-auto">
+            <Dither
+               waveColor={[1, 1, 1]}
+               baseColor={[0, 0.067, 1]}
+               disableAnimation={false}
+               enableMouseInteraction={true}
+               mouseRadius={0.4}
+               colorNum={4}
+               waveAmplitude={0.3}
+               waveFrequency={3}
+               waveSpeed={0.05}
+            />
+         </div>
+
+         {/* Content */}
+         <div className="relative z-10 max-w-[1400px] mx-auto w-full pointer-events-none">
+            <div ref={containerRef} className="relative inline-block w-full max-w-4xl mx-auto cursor-pointer pointer-events-auto">
+              <VariableProximity
+                 label="PAHAMI DOKUMEN ANDA, SEPENUHNYA"
+                 className="font-serif font-black text-6xl md:text-8xl leading-[0.9] tracking-tighter mix-blend-difference"
+                 fromFontVariationSettings="'wght' 400"
+                 toFontVariationSettings="'wght' 900"
+                 containerRef={containerRef}
+                 radius={150}
+                 falloff="exponential"
+              />
             </div>
+            <p className="mt-12 font-mono text-sm tracking-widest uppercase opacity-80 pointer-events-auto">
+               Pelajari semua fitur Nalar AI dan mulai gunakan secara gratis.
+            </p>
+            <div className="mt-16 pointer-events-auto inline-block">
+               <button className="px-8 py-4 bg-white text-[#0011ff] font-bold tracking-widest uppercase hover:bg-transparent hover:text-white border-2 border-white transition-all">
+                  Lihat Semua Fitur
+               </button>
+            </div>
+         </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-[#0011ff] text-white overflow-hidden border-t border-white/20 relative">
+         {/* Huge Watermark Behind Illustration */}
+         <div className="absolute bottom-16 w-full flex justify-center opacity-10 pointer-events-none select-none overflow-hidden">
+            <div className="font-serif font-black text-[30vw] leading-[0.7] tracking-tighter text-center">
+               NALAR<br/>AI
+            </div>
+         </div>
+
+         {/* Engraving Footer Illustration */}
+         <div className="w-full max-w-4xl mx-auto h-[600px] relative z-10 opacity-80 mix-blend-screen pointer-events-none mt-24">
+            <div className="absolute inset-0 bg-[url('/images/footer_illustration.png')] bg-contain bg-bottom bg-no-repeat"></div>
             
-            {/* Segmen 3: Mandiri */}
-            <div className="flex flex-col items-center">
-              <div className="text-center max-w-2xl mb-12">
-                <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Untuk Siapa Saja</div>
-                <h2 className="mb-6 font-serif text-4xl md:text-5xl font-medium tracking-tight text-gray-900">
-                  Uji pemahaman Anda sendiri
-                </h2>
-                <p className="text-lg text-gray-600">
-                  Generate soal latihan dari dokumen apapun. Cek seberapa jauh pemahaman Anda sebelum menghadapi ujian sebenarnya.
-                </p>
-              </div>
-              
-              <div className="relative w-full aspect-[2/1] max-w-5xl overflow-hidden rounded-2xl shadow-lg border border-gray-200">
-                <Image src="/segment_mandiri.png" alt="Laut" fill sizes="100vw" className="object-cover" />
-                
-                {/* Overlay Mockup */}
-                <div className="absolute inset-y-8 right-8 w-64 sm:w-80 rounded-xl bg-white p-5 shadow-2xl border border-gray-200 flex flex-col">
-                  <div className="border-b border-gray-100 pb-3 mb-4">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 text-center">Simulasi Ujian</h3>
-                  </div>
-                  <p className="text-sm font-bold text-gray-900 mb-6 text-center">Apa dampak utama revolusi industri?</p>
-                  <div className="space-y-2 mt-auto">
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-center text-gray-500">A. Berkurangnya polusi</div>
-                    <div className="rounded-lg border border-gray-900 bg-gray-900 p-3 text-xs font-bold text-white flex justify-between items-center">
-                      B. Mekanisasi massal <Check className="h-4 w-4" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-          </div>
-        </section>
+         </div>
 
-        {/* Section 6: CTA Penutup */}
-        <section className="relative flex min-h-[600px] items-center justify-center overflow-hidden px-6 text-center">
-          <Image src="/cta_water_lilies.png" alt="Danau dengan bunga lili air" fill sizes="100vw" className="object-cover" />
-          <div className="absolute inset-0 bg-gray-900/60"></div>
-          
-          <div className="relative z-10 mx-auto max-w-4xl text-white">
-            <h2 className="mb-8 font-serif text-5xl md:text-6xl font-medium tracking-tight">
-              Mulai belajar lebih cerdas hari ini.
-            </h2>
-            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Link
-                href="/register"
-                className="rounded-full bg-white px-8 py-3.5 text-sm font-bold text-gray-900 transition-all hover:bg-gray-100"
-              >
-                Mulai Sekarang (Gratis)
-              </Link>
-              <Link
-                href="#demo"
-                className="rounded-full border border-white/30 bg-black/30 px-8 py-3.5 text-sm font-bold text-white transition-all hover:bg-black/50 backdrop-blur-sm"
-              >
-                Lihat Demo
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Section 7: Footer */}
-      <footer className="bg-gray-900 text-white py-12 text-center">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-6 md:flex-row">
-          <div className="flex flex-col items-center gap-1 md:items-start">
-            <span className="font-serif text-2xl font-medium tracking-tight">Nalar AI.</span>
-            <p className="text-xs text-gray-400">© {new Date().getFullYear()} Nalar AI. Dibangun untuk efektivitas belajar.</p>
-          </div>
-          
-          <div className="flex gap-8 text-xs font-semibold uppercase tracking-widest text-gray-400">
-            <Link href="#" className="hover:text-white transition-colors">Privasi</Link>
-            <Link href="#" className="hover:text-white transition-colors">Persyaratan</Link>
-            <Link href="/login" className="hover:text-white transition-colors">Masuk</Link>
-          </div>
-        </div>
+         <div className="relative z-20 border-t border-white/20 px-8 py-8 flex flex-col md:flex-row items-center justify-between font-mono text-[10px] uppercase tracking-widest bg-[#0011ff]">
+            <div className="opacity-70">NALAR AI v1.0</div>
+            <div className="font-serif font-bold text-xl leading-none mt-4 md:mt-0 tracking-tighter">NALAR.AI</div>
+            <div className="opacity-70 mt-4 md:mt-0">© 2026 NALAR.AI — SEMUA HAK DILINDUNGI</div>
+         </div>
       </footer>
     </div>
   );

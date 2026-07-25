@@ -1,0 +1,13 @@
+.text-block {
+  /* Removed fixed styling so Tailwind classes take precedence */
+  display: block;
+}
+
+.text-block p {
+  margin: 0;
+}
+
+.char {
+  will-change: transform;
+  display: inline-block;
+}

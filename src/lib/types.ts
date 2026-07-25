@@ -57,6 +57,8 @@ export type ChatMessage = {
   role: string;
   content: string;
   sources_json: string | null;
+  images_json?: string | null;
+  usage_json: string | null;
   created_at: string;
 };
 

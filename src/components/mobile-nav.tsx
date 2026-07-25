@@ -72,10 +72,10 @@ export function MobileNav() {
                   <div className="mb-2 px-3 py-2 text-xs font-medium text-cloudy">
                     {user?.email}
                   </div>
-                  <Link href="/pengaturan" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-pampas hover:text-crail" onClick={() => { setIsDropdownOpen(false); setIsOpen(false); }}>
+                  <button  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-pampas hover:text-crail" onClick={() => { setIsDropdownOpen(false); setIsOpen(false); }}>
                     <Settings className="h-4 w-4" />
                     Pengaturan
-                  </Link>
+                  </button>
                   <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-pampas hover:text-crail">
                     <Globe className="h-4 w-4" />
                     Bahasa
