@@ -96,12 +96,10 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-[10px] font-mono tracking-widest uppercase text-white/50">
-            Belum punya akun?{" "}
-            <Link href="/register" className="font-bold text-white hover:underline decoration-white/50 underline-offset-4">
-              Daftar
-            </Link>
-          </p>
+          <div className="mt-8 text-center text-[10px] font-mono tracking-widest uppercase text-white/50 border-t border-white/20 pt-4">
+            <p>Default Email: admin@nalar.ai</p>
+            <p>Default Password: CHANGEME</p>
+          </div>
         </div>
 
         {/* Right: Typography Graphic */}
