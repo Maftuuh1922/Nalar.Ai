@@ -44,9 +44,6 @@ importers:
       gsap:
         specifier: ^3.15.0
         version: 3.15.0
-      gsap-trial:
-        specifier: ^3.12.7
-        version: 3.13.0
       lucide-react:
         specifier: ^1.25.0
         version: 1.25.0(react@19.2.4)
@@ -1857,10 +1854,6 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
-
-  gsap-trial@3.13.0:
-    resolution: {integrity: sha512-EBaAv7AsgzOIi7E5ny+0YAn0qgz/lX+0B8efrr4su/dhpdihSVHLktoX+RMQj8dNrBJBj/5ASXeUDKx1bEP9aA==}
-    deprecated: This package has been deprecated in favor of the standard 'gsap' package available in the public npmjs repository which now includes all bonus plugins.
 
   gsap@3.15.0:
     resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
@@ -4974,8 +4967,6 @@ snapshots:
   gopd@1.2.0: {}
 
   graceful-fs@4.2.11: {}
-
-  gsap-trial@3.13.0: {}
 
   gsap@3.15.0: {}
 

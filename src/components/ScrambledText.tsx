@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { useEffect, useRef } from 'react';
-import { gsap } from 'gsap-trial';
-import { SplitText } from 'gsap-trial/SplitText';
-import { ScrambleTextPlugin } from 'gsap-trial/ScrambleTextPlugin';
+import { gsap } from 'gsap';
+import { SplitText } from 'gsap/SplitText';
+import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
 
 import './ScrambledText.css';
 
