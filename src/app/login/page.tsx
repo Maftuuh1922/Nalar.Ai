@@ -83,6 +83,9 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 className="rounded-none border-b-2 border-white/30 bg-transparent px-2 py-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-white focus:bg-white/5 font-mono"
               />
+              <p className="text-[10px] font-mono text-white/50 mt-1">
+                Default Email: admin@nalar.ai | Default Password: CHANGEME
+              </p>
             </div>
 
             {error && <p className="text-xs font-mono text-red-400 bg-red-400/10 p-3 border border-red-400/20">{error}</p>}
@@ -95,11 +98,6 @@ export default function LoginPage() {
               {isSubmitting ? "Memproses..." : "Masuk"}
             </button>
           </form>
-
-          <div className="mt-8 text-center text-[10px] font-mono tracking-widest uppercase text-white/50 border-t border-white/20 pt-4">
-            <p>Default Email: admin@nalar.ai</p>
-            <p>Default Password: CHANGEME</p>
-          </div>
         </div>
 
         {/* Right: Typography Graphic */}
