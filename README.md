@@ -1,5 +1,5 @@
 <div align="center">
-  <h1 align="center">🧠 Nalar.ai (Frontend)</h1>
+  <h1 align="center">🧠 Nalar.ai</h1>
   <p align="center">
     <strong>Asisten AI Edukasional Pintar dengan Fitur RAG & Analisis Dokumen Real-Time</strong>
   </p>
@@ -33,7 +33,7 @@ Nalar.ai dirancang khusus untuk pelajar, mahasiswa, peneliti, dan profesional ya
 
 ## 🛠️ Tech Stack
 
-Nalar.ai Frontend dibangun menggunakan kumpulan pustaka modern untuk menjamin kecepatan dan pengalaman pengguna yang luar biasa:
+Nalar.ai dibangun menggunakan kumpulan pustaka modern untuk menjamin kecepatan dan pengalaman pengguna yang luar biasa:
 
 | Kategori | Teknologi |
 | --- | --- |
@@ -70,14 +70,14 @@ Perintah ini akan secara otomatis:
 Jika Anda ingin mengembangkan atau mengkloning Frontend ini saja (tanpa otomatisasi CLI), Anda bisa melakukannya secara konvensional:
 
 ```bash
-git clone https://github.com/Maftuuh1922/Nalar.ai_fe.git
-cd Nalar.ai_fe
+git clone https://github.com/Maftuuh1922/Nalar.ai.git
+cd Nalar.ai
 pnpm install
 pnpm dev
 ```
 
 ## 🔗 Ketergantungan Backend (Penting)
-Jika Anda menggunakan instalasi manual, Nalar.ai *Frontend* hanyalah separuh dari keajaiban. Agar seluruh fitur (Obrolan AI, Ekstraksi Dokumen, Kuis) berjalan sempurna, Anda **wajib** menjalankan repositori Backend API Nalar.ai secara berdampingan di `localhost:8000`. Jika menggunakan `nalar-ai start`, langkah ini sudah tertangani otomatis.
+Jika Anda menggunakan instalasi manual, repositori Nalar.ai ini difokuskan pada antarmuka. Agar seluruh fitur (Obrolan AI, Ekstraksi Dokumen, Kuis) berjalan sempurna, Anda **wajib** menjalankan repositori Backend API Nalar.ai secara berdampingan di `localhost:8000`. Jika menggunakan `nalar-ai`, langkah ini sudah tertangani otomatis.
 
 ---
 <div align="center">
