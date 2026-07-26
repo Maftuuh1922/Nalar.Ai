@@ -113,18 +113,37 @@ export async function apiUpload<T>(path: string, formData: FormData, token: stri
 // API Modules
 // ============================================================
 
+/** Nilai yang boleh dikirim ke endpoint konfigurasi model. */
+type ModelConfigPayload = Record<string, string | boolean | number | string[]>;
+
 export const settingsApi = {
   getAll: (token: string) =>
     apiFetch<import("./types").ModelConfig[]>("/settings/model", { token }),
-  create: (token: string, data: Record<string, string | boolean>) =>
+  create: (token: string, data: ModelConfigPayload) =>
     apiFetch<import("./types").ModelConfig>("/settings/model", {
       method: "POST",
       token,
       body: data,
     }),
-  update: (token: string, id: string, data: Record<string, string | boolean>) =>
+  update: (token: string, id: string, data: ModelConfigPayload) =>
     apiFetch<import("./types").ModelConfig>(`/settings/model/${id}`, {
       method: "PUT",
+      token,
+      body: data,
+    }),
+  /** Uji koneksi endpoint AI dan deteksi kemampuannya secara nyata. */
+  detect: (
+    token: string,
+    data: {
+      base_url: string;
+      api_key?: string;
+      model_name?: string;
+      embedding_model?: string;
+      config_id?: string | null;
+    },
+  ) =>
+    apiFetch<import("./types").DetectResult>("/settings/model/detect", {
+      method: "POST",
       token,
       body: data,
     }),
@@ -150,6 +169,19 @@ export const documentsApi = {
   },
   delete: (token: string, id: string) =>
     apiFetch<void>(`/documents/${id}`, { method: "DELETE", token }),
+  /**
+   * Ambil berkas asli sebagai blob untuk pratinjau di dalam aplikasi.
+   * Endpoint butuh header Authorization, jadi tidak bisa dipasang langsung ke `src` iframe.
+   */
+  view: async (token: string, filename: string): Promise<Blob> => {
+    const res = await fetch(`${API_BASE_URL}/api/documents/view?filename=${encodeURIComponent(filename)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new ApiError(`Berkas tidak bisa dibuka (HTTP ${res.status}).`, res.status);
+    }
+    return res.blob();
+  },
 };
 
 export const chatApi = {
@@ -183,6 +215,12 @@ export const chatApi = {
 export const chatSessionsApi = {
   getAll: (token: string) =>
     apiFetch<import("./types").ChatSession[]>("/chat/sessions", { token }),
+  rename: (token: string, id: string, title: string) =>
+    apiFetch<import("./types").ChatSession>(`/chat/sessions/${id}`, {
+      method: "PUT",
+      token,
+      body: { title },
+    }),
   delete: (token: string, id: string) =>
     apiFetch<void>(`/chat/sessions/${id}`, { method: "DELETE", token }),
   getHistory: (token: string, id: string) =>
@@ -190,11 +228,12 @@ export const chatSessionsApi = {
 };
 
 export const quizzesApi = {
-  generate: (token: string, document_id: string, topic: string, num_questions: number = 5) =>
+  /** `document_id` boleh null — soal lalu dibuat dari topik bebas. */
+  generate: (token: string, document_id: string | null, topic: string, num_questions: number = 5) =>
     apiFetch<import("./types").Quiz>("/quizzes/generate", {
       method: "POST",
       token,
-      body: { document_id, topic, num_questions },
+      body: { document_id: document_id || null, topic, num_questions },
     }),
   getAll: (token: string) =>
     apiFetch<import("./types").Quiz[]>("/quizzes", { token }),
@@ -202,6 +241,12 @@ export const quizzesApi = {
     apiFetch<import("./types").Quiz>(`/quizzes/${id}`, { token }),
   delete: (token: string, id: string) =>
     apiFetch<void>(`/quizzes/${id}`, { method: "DELETE", token }),
+  recordAttempt: (token: string, id: string, score_percentage: number) =>
+    apiFetch<{ id: string; quiz_id: string; score_percentage: number; created_at: string }>(`/quizzes/${id}/attempts`, {
+      method: "POST",
+      token,
+      body: { score_percentage },
+    }),
 };
 
 export const progressApi = {
@@ -231,4 +276,84 @@ export const notebooksApi = {
     apiFetch<import("./types").Notebook>(`/notebooks/${id}`, { method: "PUT", token, body: data }),
   delete: (token: string, id: string) =>
     apiFetch<void>(`/notebooks/${id}`, { method: "DELETE", token }),
+
+  /** Ekspor isi catatan ke berkas Word (.docx) dan picu unduhan di browser. */
+  exportDocx: async (token: string, title: string, content: string, format: "html" | "markdown" = "html") => {
+    const response = await fetch(`${API_BASE_URL}/api/notebooks/export/docx`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title, content, format }),
+    });
+    if (!response.ok) {
+      let detail = "Gagal mengekspor dokumen.";
+      try {
+        detail = (await response.json())?.detail ?? detail;
+      } catch { /* respons bukan JSON */ }
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${title.replace(/[\\/:*?"<>|]/g, "_") || "Catatan"}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
+export const researchApi = {
+  getAll: (token: string) =>
+    apiFetch<import("./types").ResearchReport[]>("/research", { token }),
+  getById: (token: string, id: string) =>
+    apiFetch<import("./types").ResearchReport>(`/research/${id}`, { token }),
+  create: (
+    token: string,
+    data: { topic: string; instructions?: string | null; depth: "ringkas" | "standar" | "mendalam" }
+  ) => apiFetch<import("./types").ResearchReport>("/research", { method: "POST", token, body: data }),
+  delete: (token: string, id: string) =>
+    apiFetch<void>(`/research/${id}`, { method: "DELETE", token }),
+
+  /** Salin laporan yang sudah jadi ke menu Catatan. */
+  toNotebook: (token: string, id: string, title?: string) =>
+    apiFetch<import("./types").Notebook>(`/research/${id}/to-notebook`, {
+      method: "POST",
+      token,
+      body: { title: title ?? null },
+    }),
+
+  /** Unduh laporan sebagai .docx; endpoint butuh header Authorization. */
+  downloadDocx: async (token: string, id: string, topic: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/research/${id}/export/docx`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      let detail = "Gagal mengunduh laporan.";
+      try {
+        detail = (await response.json())?.detail ?? detail;
+      } catch { /* respons bukan JSON */ }
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${topic.replace(/[\/:*?"<>|]/g, "_").slice(0, 80) || "Laporan_Riset"}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
+export const preferencesApi = {
+  get: (token: string) =>
+    apiFetch<import("./types").UserPreference>("/preferences", { token }),
+  update: (token: string, data: import("./types").UserPreferenceUpdate) =>
+    apiFetch<import("./types").UserPreference>("/preferences", {
+      method: "PUT",
+      token,
+      body: data,
+    }),
 };

@@ -2,18 +2,19 @@
 
 import { useState, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
-import { 
-  MessageSquare, Library, BrainCircuit, TrendingUp, Settings, LogOut, 
-  Bot, Edit3, FileText, Database, ChevronUp, Search, PanelLeftClose, PanelLeft, X,
-  Home, Heart, Pen, Box, LayoutGrid, MoreHorizontal, Share2, PencilLine, Trash2, Plus
+import {
+  MessageSquare, BrainCircuit, TrendingUp, Settings, LogOut,
+  Bot, Edit3, Database, ChevronUp, Search, PanelLeftClose, PanelLeft, X,
+  Home, Heart, Pen, MoreHorizontal, Share2, PencilLine, Trash2, Plus, BookOpen
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { SettingsModal } from "@/components/settings-modal";
 import { chatSessionsApi } from "@/lib/api";
 import type { ChatSession } from "@/lib/types";
 import { useLanguage } from "@/lib/i18n";
+import { useToast } from "@/components/toast-provider";
 
 // Context for sidebar state
 const SidebarContext = createContext<{ collapsed: boolean; toggle: () => void }>({ collapsed: false, toggle: () => {} });
@@ -30,10 +31,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const currentSessionId = searchParams.get("s");
   const { user, logout, token } = useAuth();
   const { t } = useLanguage();
+  const { toastSuccess, toastError } = useToast();
   const { collapsed, toggle } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -42,10 +45,57 @@ export function Sidebar() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
 
   // Fetch sessions
-  useEffect(() => {
+  const refreshSessions = () => {
     if (!token) return;
     chatSessionsApi.getAll(token).then(setSessions).catch(() => {});
+  };
+  useEffect(refreshSessions, [token]);
+
+  // Refresh daftar sesi saat ada sesi baru dibuat dari halaman chat
+  useEffect(() => {
+    const handler = () => refreshSessions();
+    window.addEventListener("sessions-changed", handler);
+    return () => window.removeEventListener("sessions-changed", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function handleShareSession(session: ChatSession) {
+    const url = `${window.location.origin}/beranda?s=${session.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toastSuccess("Tautan percakapan disalin ke clipboard.");
+    } catch {
+      prompt("Salin tautan percakapan:", url);
+    }
+  }
+
+  async function handleRenameSession(session: ChatSession) {
+    if (!token) return;
+    const newTitle = prompt("Judul percakapan baru:", session.title || "");
+    if (!newTitle || newTitle.trim() === "" || newTitle === session.title) return;
+    try {
+      const updated = await chatSessionsApi.rename(token, session.id, newTitle.trim());
+      setSessions(prev => prev.map(s => (s.id === session.id ? { ...s, title: updated.title } : s)));
+      toastSuccess("Judul percakapan diperbarui.");
+    } catch {
+      toastError("Gagal mengubah judul percakapan.");
+    }
+  }
+
+  async function handleDeleteSession(session: ChatSession) {
+    if (!token) return;
+    if (!confirm(`Hapus percakapan "${session.title || "Percakapan Baru"}"?`)) return;
+    try {
+      await chatSessionsApi.delete(token, session.id);
+      setSessions(prev => prev.filter(s => s.id !== session.id));
+      if (currentSessionId === session.id) {
+        router.push("/beranda");
+      }
+      toastSuccess("Percakapan dihapus.");
+    } catch {
+      toastError("Gagal menghapus percakapan.");
+    }
+  }
 
   // Listen for open-settings event
   useEffect(() => {
@@ -78,11 +128,11 @@ export function Sidebar() {
           </button>
           
           <NavIconOnly href="/beranda" icon={Home} isActive={pathname === "/beranda"} label={t("home")} />
-          <NavIconOnly href="/materi-saya" icon={Library} isActive={pathname === "/materi-saya"} label={t("materials")} />
-          <NavIconOnly href="/agents" icon={Box} isActive={pathname === "/agents"} label={t("aiAssistant")} />
+          <NavIconOnly href="/agents" icon={Bot} isActive={pathname === "/agents"} label={t("aiAssistant")} />
           <NavIconOnly href="/catatan" icon={Edit3} isActive={pathname === "/catatan"} label={t("notes")} />
           <NavIconOnly href="/latihan-soal" icon={BrainCircuit} isActive={pathname === "/latihan-soal"} label={t("practice")} />
-          <NavIconOnly href="/progress" icon={LayoutGrid} isActive={pathname === "/progress"} label={t("learningSpace")} />
+          <NavIconOnly href="/book" icon={BookOpen} isActive={pathname === "/book"} label={t("deepResearch")} />
+          <NavIconOnly href="/progress" icon={TrendingUp} isActive={pathname === "/progress"} label={t("learningSpace")} />
 
           <div className="mt-auto">
             <button 
@@ -162,11 +212,11 @@ export function Sidebar() {
         <div className="flex-1 overflow-y-auto px-3 scrollbar-none">
           <nav className="flex flex-col gap-0.5">
             <NavItem href="/beranda" icon={Home} label={t("home")} isActive={pathname === "/beranda" && !currentSessionId} />
-            <NavItem href="/materi-saya" icon={Library} label={t("materials")} isActive={pathname === "/materi-saya"} />
-            <NavItem href="/agents" icon={Box} label={t("aiAssistant")} isActive={pathname === "/agents"} />
+            <NavItem href="/agents" icon={Bot} label={t("aiAssistant")} isActive={pathname === "/agents"} />
             <NavItem href="/catatan" icon={Edit3} label={t("notes")} isActive={pathname === "/catatan"} />
             <NavItem href="/latihan-soal" icon={BrainCircuit} label={t("practice")} isActive={pathname === "/latihan-soal"} />
-            <NavItem href="/progress" icon={LayoutGrid} label={t("learningSpace")} isActive={pathname === "/progress"} />
+            <NavItem href="/book" icon={BookOpen} label={t("deepResearch")} isActive={pathname === "/book"} />
+            <NavItem href="/progress" icon={TrendingUp} label={t("learningSpace")} isActive={pathname === "/progress"} />
           </nav>
 
           {/* Riwayat */}
@@ -209,14 +259,14 @@ export function Sidebar() {
                           </PopoverTrigger>
                           <PopoverContent className="p-1 min-w-[150px] shadow-none border border-white/20 rounded-none bg-[#0011ff] border border-white/20">
                             <div className="flex flex-col w-full">
-                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/5 rounded-none text-white/80 w-full text-left transition-colors">
+                              <button onClick={() => handleShareSession(session)} className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/5 rounded-none text-white/80 w-full text-left transition-colors">
                                 <Share2 className="h-3.5 w-3.5 text-white/70" /> {t("share")}
                               </button>
-                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/5 rounded-none text-white/80 w-full text-left transition-colors">
+                              <button onClick={() => handleRenameSession(session)} className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/5 rounded-none text-white/80 w-full text-left transition-colors">
                                 <PencilLine className="h-3.5 w-3.5 text-white/70" /> {t("rename")}
                               </button>
                               <div className="h-px bg-gray-100 my-1 mx-1"></div>
-                              <button className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-red-50 rounded-none text-red-600 w-full text-left transition-colors">
+                              <button onClick={() => handleDeleteSession(session)} className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-red-50 rounded-none text-red-600 w-full text-left transition-colors">
                                 <Trash2 className="h-3.5 w-3.5 text-red-500" /> {t("delete")}
                               </button>
                             </div>
@@ -246,11 +296,11 @@ export function Sidebar() {
               >
                 <Settings className="h-4 w-4 text-white/70" /> {t("settings")}
               </button>
-              <button className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-white/80 hover:bg-white/5 transition-colors text-left w-full">
+              <button
+                onClick={() => { setMenuOpen(false); router.push("/catatan"); }}
+                className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-white/80 hover:bg-white/5 transition-colors text-left w-full"
+              >
                 <Database className="h-4 w-4 text-white/70" /> {t("memory")}
-              </button>
-              <button className="flex items-center gap-3 rounded-none px-3 py-2.5 text-[13px] font-medium text-white/80 hover:bg-white/5 transition-colors text-left w-full">
-                <FileText className="h-4 w-4 text-white/70" /> {t("knowledge")}
               </button>
               <div className="my-1.5 h-px bg-[#0011ff] border border-white/20"></div>
               <button 

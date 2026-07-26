@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { agentsApi, ApiError } from "@/lib/api";
+import { useToast } from "@/components/toast-provider";
 import type { Agent } from "@/lib/types";
 import {
   Bot, BrainCircuit, BookOpen, Code, Cpu, Edit3, Loader2,
@@ -55,6 +56,7 @@ function AgentIcon({ name, className }: { name: string; className?: string }) {
 
 export default function AgentsPage() {
   const { token } = useAuth();
+  const { toastSuccess, toastError } = useToast();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -136,8 +138,9 @@ export default function AgentsPage() {
     try {
       await agentsApi.delete(token, id);
       setAgents((prev) => prev.filter((a) => a.id !== id));
+      toastSuccess("Asisten dihapus.");
     } catch {
-      alert("Gagal menghapus asisten.");
+      toastError("Gagal menghapus asisten.");
     }
   }
 

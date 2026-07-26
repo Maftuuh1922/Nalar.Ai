@@ -58,6 +58,8 @@ interface ChatMessageProps {
   onRegenerate: () => void;
   onSaveEditPrompt: (index: number, text: string) => void;
   isSubmitting: boolean;
+  /** Pesan ini masih ditulis AI — sembunyikan footer & aksi sampai selesai. */
+  isStreaming?: boolean;
 }
 
 /**
@@ -71,6 +73,7 @@ export const ChatMessage = React.memo(function ChatMessage({
   onRegenerate,
   onSaveEditPrompt,
   isSubmitting,
+  isStreaming = false,
 }: ChatMessageProps) {
   // All interactive state lives INSIDE this component so only THIS message re-renders
   const [copied, setCopied] = useState(false);
@@ -329,15 +332,18 @@ export const ChatMessage = React.memo(function ChatMessage({
         {/* Main markdown answer */}
         <MarkdownContent content={msg.content} enableHighlight={highlighted} textAlign={textAlign} />
 
-        {/* Prepared using... text */}
-        <div className="mt-5 border-t border-gray-100 pt-3">
-          <p className="text-[13px] font-medium text-gray-500">
-            Disiapkan menggunakan Nalar AI
-          </p>
-        </div>
+        {/* Penanda & tombol aksi baru muncul setelah jawaban selesai ditulis,
+            supaya pesan yang masih mengalir tidak terlihat seperti sudah jadi. */}
+        {!isStreaming && (
+          <div className="mt-5 border-t border-gray-100 pt-3">
+            <p className="text-[13px] font-medium text-gray-500">
+              Disiapkan menggunakan Nalar AI
+            </p>
+          </div>
+        )}
 
         {/* Footer action bar */}
-        <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+        <div className={`mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-500 transition-opacity duration-150 ${isStreaming ? "hidden" : "opacity-0 group-hover:opacity-100"}`}>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Copy */}
             <button
@@ -478,27 +484,30 @@ export const ChatMessage = React.memo(function ChatMessage({
               </Popover>
             )}
 
-          {/* Time & token info */}
-          <div className="flex items-center gap-2.5 text-[11px] font-medium text-gray-500">
-            {msg.timestamp && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3 text-gray-400" />
-                {msg.timestamp}
-              </span>
-            )}
-            {msg.responseTimeMs && (
-              <span className="flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80 font-bold text-[10px]">
-                <Timer className="h-3 w-3 text-emerald-600" />
-                {(msg.responseTimeMs / 1000).toFixed(1)}s
-              </span>
-            )}
-            {msg.usage && (
-              <span className="flex items-center gap-1">
-                <Zap className="h-3.5 w-3.5 text-emerald-600" />
-                {msg.usage.total_tokens} tokens
-              </span>
-            )}
-          </div>
+          {/* Waktu & pemakaian token — hanya setelah jawaban rampung, dan
+              angka nol disembunyikan karena tidak memberi informasi apa pun. */}
+          {!isStreaming && (
+            <div className="flex items-center gap-2.5 text-[11px] font-medium text-gray-500">
+              {msg.timestamp && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-gray-400" />
+                  {msg.timestamp}
+                </span>
+              )}
+              {!!msg.responseTimeMs && (
+                <span className="flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80 font-bold text-[10px]">
+                  <Timer className="h-3 w-3 text-emerald-600" />
+                  {(msg.responseTimeMs / 1000).toFixed(1)}s
+                </span>
+              )}
+              {msg.usage && msg.usage.total_tokens > 0 && (
+                <span className="flex items-center gap-1">
+                  <Zap className="h-3.5 w-3.5 text-emerald-600" />
+                  {msg.usage.total_tokens.toLocaleString("id-ID")} token
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
       {/* Floating Source Detail Panel */}

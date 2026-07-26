@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { documentsApi, quizzesApi, ApiError } from "@/lib/api";
-import type { Document, Quiz, QuizQuestion } from "@/lib/types";
-import { BookOpen, BrainCircuit, CheckCircle2, ChevronRight, FileText, Loader2, Target, XCircle } from "lucide-react";
+import { preferencesApi, quizzesApi, ApiError } from "@/lib/api";
+import type { Quiz } from "@/lib/types";
+import { useToast } from "@/components/toast-provider";
+import { BookOpen, BrainCircuit, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Loader2, Play, Target, Trash2, XCircle } from "lucide-react";
 
 export default function LatihanSoalPage() {
   const { token } = useAuth();
-  
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [selectedDocId, setSelectedDocId] = useState<string>("");
+  const { toastSuccess, toastError } = useToast();
+
+  const [savedQuizzes, setSavedQuizzes] = useState<Quiz[]>([]);
   const [topic, setTopic] = useState("");
   const [numQuestions, setNumQuestions] = useState(5);
   
@@ -25,31 +26,67 @@ export default function LatihanSoalPage() {
 
   useEffect(() => {
     if (token) {
-      documentsApi.getAll(token).then(docs => {
-        // Hanya dokumen yang berhasil di-indeks yang bisa dijadikan soal
-        setDocuments(docs.filter(d => d.status === "indexed"));
-      }).catch(console.error);
+      quizzesApi.getAll(token).then(setSavedQuizzes).catch(console.error);
+      // Jumlah soal awal mengikuti Pengaturan > Memori & Instruksi.
+      preferencesApi
+        .get(token)
+        .then(pref => setNumQuestions(pref.default_quiz_questions))
+        .catch(() => { /* pakai nilai bawaan bila preferensi gagal dimuat */ });
     }
   }, [token]);
 
+  // Pilihan cepat 5/10/15, ditambah nilai bawaan user bila berbeda.
+  const questionChoices = useMemo(
+    () => Array.from(new Set([5, 10, 15, numQuestions])).sort((a, b) => a - b),
+    [numQuestions],
+  );
+
+  async function handleDeleteQuiz(id: string) {
+    if (!token) return;
+    if (!confirm("Hapus kuis ini beserta riwayatnya?")) return;
+    try {
+      await quizzesApi.delete(token, id);
+      setSavedQuizzes(prev => prev.filter(q => q.id !== id));
+      toastSuccess("Kuis dihapus.");
+    } catch {
+      toastError("Gagal menghapus kuis.");
+    }
+  }
+
+  function handleStartSavedQuiz(quiz: Quiz) {
+    setActiveQuiz(quiz);
+    setCurrentQuestionIndex(0);
+    setSelectedAnswers({});
+    setIsFinished(false);
+    setError(null);
+  }
+
   async function handleGenerateQuiz(e: React.FormEvent) {
     e.preventDefault();
-    if (!token || !selectedDocId || !topic) return;
+    if (!token || !topic.trim()) return;
 
     setIsGenerating(true);
     setError(null);
     try {
-      const quiz = await quizzesApi.generate(token, selectedDocId, topic, numQuestions);
+      const quiz = await quizzesApi.generate(token, null, topic.trim(), numQuestions);
       setActiveQuiz(quiz);
+      setSavedQuizzes(prev => [quiz, ...prev]);
+      toastSuccess(`${quiz.questions_data.length} soal siap dikerjakan.`);
       // Reset quiz state
       setCurrentQuestionIndex(0);
       setSelectedAnswers({});
       setIsFinished(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Gagal membuat kuis. Pastikan model AI merespons dengan format JSON yang valid.");
+      const msg = err instanceof ApiError ? err.message : "Gagal membuat kuis. Coba ulangi beberapa saat lagi.";
+      setError(msg);
+      toastError(msg);
     } finally {
       setIsGenerating(false);
     }
+  }
+
+  function handlePrevQuestion() {
+    setCurrentQuestionIndex(prev => Math.max(0, prev - 1));
   }
 
   function handleSelectAnswer(option: string) {
@@ -66,6 +103,17 @@ export default function LatihanSoalPage() {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
       setIsFinished(true);
+      // Simpan skor ke backend agar masuk statistik mastery di Learning Space
+      if (token) {
+        let correct = 0;
+        activeQuiz.questions_data.forEach((q, idx) => {
+          if (selectedAnswers[idx] === q.answer) correct++;
+        });
+        const score = Math.round((correct / activeQuiz.questions_data.length) * 100);
+        quizzesApi.recordAttempt(token, activeQuiz.id, score).catch(() => {
+          toastError("Skor gagal disimpan ke Learning Space.");
+        });
+      }
     }
   }
 
@@ -113,12 +161,12 @@ export default function LatihanSoalPage() {
                   {activeQuiz.questions_data.map((q, idx) => {
                     const isCorrect = selectedAnswers[idx] === q.answer;
                     return (
-                      <div key={idx} className={`rounded-none border p-5 ${isCorrect ? 'border-white/30 bg-white/10/50' : 'border-red-200 bg-red-50/50'}`}>
+                      <div key={idx} className={`rounded-none border p-5 ${isCorrect ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-red-400/40 bg-red-500/10'}`}>
                         <p className="font-medium text-white mb-3">{idx + 1}. {q.question}</p>
                         <div className="space-y-2 text-sm">
                           <p className="flex items-center gap-2">
                             <span className="text-cloudy w-24">Jawabanmu:</span>
-                            <span className={`font-semibold ${isCorrect ? 'text-white' : 'text-red-600 flex items-center gap-1'}`}>
+                            <span className={`font-semibold ${isCorrect ? 'text-emerald-300' : 'text-red-300 flex items-center gap-1'}`}>
                               {selectedAnswers[idx] || "Tidak dijawab"} {!isCorrect && <XCircle className="h-4 w-4" />}
                             </span>
                           </p>
@@ -169,8 +217,8 @@ export default function LatihanSoalPage() {
                         onClick={() => handleSelectAnswer(opt)}
                         className={`w-full rounded-none border p-4 text-left text-sm transition-all ${
                           selectedAnswers[currentQuestionIndex] === opt
-                            ? "border-gray-900 bg-pampas font-semibold text-white shadow-none"
-                            : "border-cloudy/20 text-foreground hover:border-gray-400 hover:bg-cloudy/5"
+                            ? "border-white bg-white font-semibold text-[#0011ff] shadow-none"
+                            : "border-white/30 text-white hover:border-white/60 hover:bg-white/5"
                         }`}
                       >
                         <span className="mr-3 font-bold text-cloudy inline-block w-4">{String.fromCharCode(65 + i)}</span> 
@@ -180,7 +228,14 @@ export default function LatihanSoalPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-4">
+                <div className="flex items-center justify-between pt-4">
+                  <button
+                    onClick={handlePrevQuestion}
+                    disabled={currentQuestionIndex === 0}
+                    className="flex items-center gap-2 rounded-none border border-white/30 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Sebelumnya
+                  </button>
                   <button
                     onClick={handleNextQuestion}
                     disabled={!isAnswered}
@@ -203,7 +258,7 @@ export default function LatihanSoalPage() {
     <div className="flex h-full flex-col bg-transparent">
       <div className="border-b border-cloudy/10 px-8 py-6">
         <h1 className="text-2xl font-bold font-serif text-white">Latihan Soal</h1>
-        <p className="mt-1 text-sm text-cloudy">Uji pemahaman Anda dengan soal yang di-generate dari materi.</p>
+        <p className="mt-1 text-sm text-cloudy">Tulis topiknya, AI yang menyusun soalnya.</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
@@ -211,32 +266,11 @@ export default function LatihanSoalPage() {
           <form onSubmit={handleGenerateQuiz} className="rounded-none border border-cloudy/20 bg-transparent p-8 shadow-none space-y-6">
             
             <div>
-              <label className="mb-2 block text-sm font-bold text-white">Pilih Materi Rujukan</label>
-              <div className="relative">
-                <FileText className="absolute left-3 top-3 h-5 w-5 text-cloudy" />
-                <select 
-                  className="w-full appearance-none rounded-none border border-cloudy/30 bg-pampas py-3 pl-10 pr-4 text-sm font-medium text-foreground outline-none focus:border-gray-900 focus:bg-transparent"
-                  value={selectedDocId}
-                  onChange={(e) => setSelectedDocId(e.target.value)}
-                  required
-                >
-                  <option value="" disabled>-- Pilih Dokumen --</option>
-                  {documents.map(doc => (
-                    <option key={doc.id} value={doc.id}>{doc.filename}</option>
-                  ))}
-                </select>
-              </div>
-              {documents.length === 0 && (
-                <p className="mt-2 text-xs text-amber-600">Anda belum memiliki materi yang terindeks. Silakan unggah di menu Materi Saya.</p>
-              )}
-            </div>
-
-            <div>
               <label className="mb-2 block text-sm font-bold text-white">Topik Spesifik</label>
               <div className="relative">
                 <BookOpen className="absolute left-3 top-3 h-5 w-5 text-cloudy" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Contoh: Hukum Archimedes, Revolusi Industri, dll"
                   className="w-full rounded-none border border-cloudy/30 bg-pampas py-3 pl-10 pr-4 text-sm font-medium text-foreground outline-none focus:border-gray-900 focus:bg-transparent"
                   value={topic}
@@ -249,7 +283,7 @@ export default function LatihanSoalPage() {
             <div>
               <label className="mb-2 block text-sm font-bold text-white">Jumlah Soal</label>
               <div className="flex gap-3">
-                {[5, 10, 15].map(num => (
+                {questionChoices.map(num => (
                   <button
                     key={num}
                     type="button"
@@ -275,7 +309,7 @@ export default function LatihanSoalPage() {
             <div className="pt-4 border-t border-cloudy/10">
               <button
                 type="submit"
-                disabled={isGenerating || !selectedDocId || !topic}
+                disabled={isGenerating || !topic.trim()}
                 className="flex w-full items-center justify-center gap-2 rounded-none bg-gray-900 py-3.5 text-sm font-bold text-white transition-all hover:bg-gray-800 hover:shadow-none disabled:opacity-50 disabled:hover:shadow-none"
               >
                 {isGenerating ? (
@@ -293,6 +327,44 @@ export default function LatihanSoalPage() {
             </div>
 
           </form>
+
+          {/* Daftar Kuis Tersimpan */}
+          {savedQuizzes.length > 0 && (
+            <div className="mt-10">
+              <div className="mb-4 flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-cloudy" />
+                <h2 className="text-lg font-bold font-serif text-white">Kuis Tersimpan</h2>
+                <span className="rounded-none border border-cloudy/30 px-2 py-0.5 text-xs font-bold text-cloudy">{savedQuizzes.length}</span>
+              </div>
+              <div className="space-y-3">
+                {savedQuizzes.map(quiz => (
+                  <div key={quiz.id} className="flex items-center justify-between rounded-none border border-cloudy/20 bg-transparent p-4 hover:border-cloudy/40 transition-colors">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">{quiz.topic}</p>
+                      <p className="text-xs text-cloudy">
+                        {quiz.questions_data.length} soal • {new Date(quiz.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        onClick={() => handleStartSavedQuiz(quiz)}
+                        className="flex items-center gap-1.5 rounded-none bg-gray-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-gray-800"
+                      >
+                        <Play className="h-3.5 w-3.5" /> Kerjakan
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuiz(quiz.id)}
+                        className="rounded-none border border-red-200 p-2 text-red-500 transition-colors hover:bg-red-50"
+                        title="Hapus kuis"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

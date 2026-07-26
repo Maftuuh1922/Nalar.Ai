@@ -39,8 +39,15 @@ import {
   Trash2,
   ChevronRight,
   ChevronLeft,
-  Square
+  Square,
+  BookMarked,
+  Quote,
+  ExternalLink,
+  Globe,
+  PenLine,
+  ScrollText
 } from "lucide-react";
+import { marked } from "marked";
 
 import { useAuth } from "@/components/auth-provider";
 import { settingsApi, chatSessionsApi, agentsApi, documentsApi, notebooksApi, ApiError } from "@/lib/api";
@@ -49,10 +56,93 @@ import { ChatMessage } from "@/components/chat-message";
 import type { DisplayMessage } from "@/components/chat-message";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { DrawioViewer } from "@/components/drawio-viewer";
+import { ReferenceViewer, isPdfUrl, type ViewerSource } from "@/components/reference-viewer";
 
 const MemoDrawioViewer = memo(DrawioViewer);
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/** Satu rujukan yang dikumpulkan agen selama percakapan (web atau dokumen). */
+type SourceRef = { type: string; title: string; url: string; snippet?: string };
+
+/** Gaya sitasi yang tersedia untuk tombol salin cepat. */
+type CitationStyle = "apa" | "ieee" | "mla";
+
+const CITATION_STYLES: { id: CitationStyle; label: string }[] = [
+  { id: "apa", label: "APA" },
+  { id: "ieee", label: "IEEE" },
+  { id: "mla", label: "MLA" },
+];
+
+/** Label pendek kemampuan model untuk lencana di pemilih model. */
+const CAPABILITY_LABEL: Record<string, string> = {
+  vision: "Gambar",
+  tools: "Agen",
+  reasoning: "Nalar",
+  code: "Kode",
+  audio: "Audio",
+  embedding: "Embed",
+};
+
+/** Laporan yang terdeteksi dari balasan AI dan siap dibuka di kanvas. */
+type ReportDraft = { title: string; markdown: string; html: string };
+
+/** Kata kunci yang menandakan user memang sedang meminta sebuah laporan. */
+const REPORT_REQUEST = /\b(laporan|makalah|paper|artikel ilmiah|proposal|skripsi|tesis|esai|essay|karya tulis|literature review|tinjauan pustaka)\b/i;
+
+/**
+ * Tebak apakah balasan AI berbentuk laporan sehingga layak dibuka di kanvas.
+ * Kriteria sengaja konservatif supaya jawaban obrolan biasa tidak ikut terbuka:
+ * struktur berjudul banyak + cukup panjang, atau user memang minta laporan.
+ */
+function detectReport(answer: string, userMessage: string): { title: string; markdown: string } | null {
+  // Blok kode (mis. XML draw.io) tidak dihitung sebagai isi laporan.
+  const clean = answer.replace(/```[\s\S]*?```/g, "");
+  const headings = clean.match(/^#{1,3}\s+\S.*$/gm) ?? [];
+  const words = clean.split(/\s+/).filter(Boolean).length;
+  const asked = REPORT_REQUEST.test(userMessage);
+
+  const qualifies = asked ? headings.length >= 2 && words >= 200 : headings.length >= 3 && words >= 450;
+  if (!qualifies) return null;
+
+  const h1 = clean.match(/^#\s+(.+)$/m);
+  const rawTitle = (h1?.[1] ?? headings[0] ?? "").replace(/^#+\s*/, "").replace(/[*_`]/g, "").trim();
+  const title = (rawTitle || "Laporan Nalar AI").slice(0, 120);
+  return { title, markdown: clean.trim() };
+}
+
+/** Ambil nama situs dari URL untuk dipakai sebagai penerbit di sitasi. */
+function siteNameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Susun satu entri daftar pustaka. Tanggal akses memakai hari ini karena
+ * sumber diambil langsung saat percakapan berlangsung.
+ */
+function formatCitation(ref: SourceRef, index: number, style: CitationStyle): string {
+  const site = siteNameOf(ref.url);
+  const today = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  const year = new Date().getFullYear();
+
+  if (ref.type === "document") {
+    if (style === "ieee") return `[${index}] "${ref.title}," dokumen pribadi, diakses ${today}.`;
+    if (style === "mla") return `"${ref.title}." Dokumen pribadi, diakses ${today}.`;
+    return `${ref.title}. (${year}). Dokumen pribadi. Diakses ${today}.`;
+  }
+
+  if (style === "ieee") {
+    return `[${index}] "${ref.title}," ${site || "web"}. [Daring]. Tersedia: ${ref.url}. [Diakses: ${today}].`;
+  }
+  if (style === "mla") {
+    return `"${ref.title}." ${site || "Web"}, ${ref.url}. Diakses ${today}.`;
+  }
+  return `${site || "Sumber web"}. (${year}). ${ref.title}. Diakses ${today}, dari ${ref.url}`;
+}
 
 async function apiFetchRaw<T>(path: string, options: { method?: string; token?: string; body?: unknown; onEvent?: (parsed: any) => void; abortSignal?: AbortSignal } = {}): Promise<T> {
   const { method = "GET", body, token, abortSignal } = options;
@@ -186,6 +276,11 @@ export default function BerandaPage() {
   const router = useRouter();
   const [activeDiagramXml, setActiveDiagramXml] = useState<string | null>(null);
 
+  // Kanvas laporan: terbuka otomatis begitu balasan AI berbentuk laporan
+  const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isOpeningReport, setIsOpeningReport] = useState(false);
+
   // Toast notification state
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -209,6 +304,13 @@ export default function BerandaPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Referensi yang dikumpulkan agen sepanjang percakapan, untuk sitasi instan
+  const [webRefs, setWebRefs] = useState<SourceRef[]>([]);
+  const [showRefPanel, setShowRefPanel] = useState(false);
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>("apa");
+  const [expandedRef, setExpandedRef] = useState<number | null>(null);
+  const [previewSource, setPreviewSource] = useState<ViewerSource | null>(null);
 
 
   // Agent & Model Config state
@@ -325,7 +427,7 @@ export default function BerandaPage() {
       setSelectedCustomDocIds([doc.id]);
       showToast(`📄 Berhasil mengunggah & mengimpor "${file.name}" ke Workspace!`);
     } catch (err) {
-      alert(`Gagal mengunggah dokumen: ${err instanceof ApiError ? err.message : String(err)}`);
+      showToast(`⚠️ Gagal mengunggah dokumen: ${err instanceof ApiError ? err.message : String(err)}`);
       setUploadingFileName(null);
     } finally {
       setIsUploading(false);
@@ -370,10 +472,65 @@ export default function BerandaPage() {
 
     try {
       const title = `Catatan AI - ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`;
-      await notebooksApi.create(token, { title, content: lastAiMsg.content });
+      // Editor catatan menyimpan HTML, jadi markdown balasan AI dikonversi dulu
+      // agar judul, daftar, dan tabelnya tampil rapi — bukan sebagai teks mentah.
+      const html = withBibliography(await marked.parse(lastAiMsg.content));
+      await notebooksApi.create(token, { title, content: html });
       showToast("🚀 Berhasil diimpor & disimpan ke Catatan Workspace!");
     } catch (err) {
       showToast(`⚠️ Gagal menyimpan ke Catatan Workspace: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** Tempelkan daftar pustaka dari rujukan yang terkumpul di akhir dokumen. */
+  function withBibliography(html: string): string {
+    if (webRefs.length === 0) return html;
+    const items = webRefs
+      .map((r, i) => `<li>${formatCitation(r, i + 1, citationStyle)}</li>`)
+      .join("");
+    return `${html}<h2>Daftar Pustaka</h2><ol>${items}</ol>`;
+  }
+
+  /**
+   * Begitu AI selesai menulis sesuatu yang berbentuk laporan, kanvas dibuka
+   * otomatis di sebelah chat supaya user langsung melihat hasilnya utuh.
+   */
+  async function maybeOpenReportCanvas(answer: string, userMessage: string) {
+    const detected = detectReport(answer, userMessage);
+    if (!detected) return;
+    const html = await marked.parse(detected.markdown);
+    setReportDraft({ ...detected, html });
+    setIsReportOpen(true);
+  }
+
+  /**
+   * Kirim laporan di kanvas ke menu Catatan sebagai dokumen baru, lalu buka
+   * langsung editornya lewat deep-link `/catatan?nb=<id>`.
+   */
+  async function openReportEditor() {
+    if (!token || !reportDraft || isOpeningReport) return;
+    setIsOpeningReport(true);
+    try {
+      const nb = await notebooksApi.create(token, {
+        title: reportDraft.title,
+        content: withBibliography(reportDraft.html),
+      });
+      showToast("📄 Laporan dibuka di editor Catatan");
+      router.push(`/catatan?nb=${nb.id}`);
+    } catch (err) {
+      showToast(`⚠️ Gagal membuka editor laporan: ${err instanceof Error ? err.message : String(err)}`);
+      setIsOpeningReport(false);
+    }
+  }
+
+  /** Salin isi laporan (markdown mentah) ke papan klip. */
+  async function copyReport() {
+    if (!reportDraft) return;
+    try {
+      await navigator.clipboard.writeText(reportDraft.markdown);
+      showToast("Isi laporan disalin");
+    } catch {
+      showToast("⚠️ Gagal menyalin laporan");
     }
   }
 
@@ -423,6 +580,7 @@ export default function BerandaPage() {
       const assistantTimeStr = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 
       extractAndSetDiagramXml(result.answer);
+      void maybeOpenReportCanvas(result.answer, newPrompt);
 
       setChatMessages((prev) => [
         ...prev,
@@ -486,6 +644,9 @@ export default function BerandaPage() {
 
       const elapsedMs = Date.now() - startTime;
       const assistantTimeStr = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+      extractAndSetDiagramXml(result.answer);
+      void maybeOpenReportCanvas(result.answer, lastUserMsg.content);
 
       setChatMessages((prev) => [
         ...prev,
@@ -557,6 +718,21 @@ export default function BerandaPage() {
     const currentImages = [...attachedImages];
     setAttachedImages([]);
 
+    // Lampiran gambar hanya bisa dibaca model dengan kemampuan "vision".
+    // Kalau profil aktif tidak mendukungnya, pindah otomatis ke profil yang bisa.
+    if (currentImages.length > 0) {
+      const active = configs.find((c) => c.is_active);
+      if (active && !(active.capabilities ?? []).includes("vision")) {
+        const visionCfg = configs.find((c) => (c.capabilities ?? []).includes("vision"));
+        if (visionCfg) {
+          await handleSetActive(visionCfg.id);
+          showToast(`🖼️ Beralih ke "${visionCfg.name}" karena bisa membaca gambar`);
+        } else {
+          showToast("⚠️ Belum ada model dengan kemampuan gambar — atur di Pengaturan > Model AI");
+        }
+      }
+    }
+
     // Add user message to display with attached document chips
     setChatMessages((prev) => [
       ...prev,
@@ -626,6 +802,9 @@ export default function BerandaPage() {
       ]);
 
       abortControllerRef.current = new AbortController();
+      // Penanda agar label proses tidak melompat mundur saat model
+      // menyelipkan potongan penalaran di tengah penulisan jawaban.
+      let hasStartedWriting = false;
 
       const result = await apiFetchRaw<ChatResponseData>("/chat", {
         method: "POST",
@@ -641,8 +820,21 @@ export default function BerandaPage() {
             else setThinkingText(`Mengeksekusi tool: ${parsed.name}...`);
           } else if (parsed.event === "tool_result") {
             setThinkingText("Menganalisis hasil pencarian...");
+            // Kumpulkan rujukan agar bisa disitasi instan, tanpa duplikat
+            if (Array.isArray(parsed.sources) && parsed.sources.length > 0) {
+              setWebRefs(prev => {
+                const merged = [...prev];
+                for (const src of parsed.sources as SourceRef[]) {
+                  const key = (src.url || src.title).toLowerCase();
+                  if (!merged.some(r => (r.url || r.title).toLowerCase() === key)) merged.push(src);
+                }
+                return merged;
+              });
+            }
           } else if (parsed.event === "reasoning") {
-            setThinkingText("Menyusun pemikiran...");
+            // Begitu jawaban mulai ditulis, jangan mundur lagi ke label "berpikir" —
+            // itu membuat user mengira prosesnya mengulang dari awal.
+            if (!hasStartedWriting) setThinkingText("Menyusun pemikiran...");
             setChatMessages(prev => {
               const newArr = [...prev];
               const lastIdx = newArr.length - 1;
@@ -652,6 +844,7 @@ export default function BerandaPage() {
               return newArr;
             });
           } else if (parsed.event === "text") {
+            hasStartedWriting = true;
             setThinkingText("Menulis jawaban...");
             setChatMessages(prev => {
               const newArr = [...prev];
@@ -682,6 +875,7 @@ export default function BerandaPage() {
       }
 
       extractAndSetDiagramXml(result.answer);
+      void maybeOpenReportCanvas(result.answer, userMessage);
 
       // Finalize the last message with full result to guarantee exact match
       setChatMessages((prev) => {
@@ -732,6 +926,8 @@ export default function BerandaPage() {
   async function loadSession(id: string) {
     if (!token) return;
     setSessionId(id);
+    setReportDraft(null);
+    setIsReportOpen(false);
     try {
       const history = await chatSessionsApi.getHistory(token, id);
       const formattedMsgs = history.map((m) => ({
@@ -772,6 +968,32 @@ export default function BerandaPage() {
     setChatMessages([]);
     setActiveAgent(null);
     setActiveDiagramXml(null);
+    setReportDraft(null);
+    setIsReportOpen(false);
+    setWebRefs([]);
+    setExpandedRef(null);
+  }
+
+  /** Salin satu entri sitasi sesuai gaya yang dipilih. */
+  async function copyCitation(ref: SourceRef, index: number) {
+    try {
+      await navigator.clipboard.writeText(formatCitation(ref, index + 1, citationStyle));
+      showToast(`Sitasi ${citationStyle.toUpperCase()} disalin`);
+    } catch {
+      showToast("⚠️ Gagal menyalin sitasi");
+    }
+  }
+
+  /** Salin seluruh daftar pustaka sekaligus. */
+  async function copyAllCitations() {
+    if (webRefs.length === 0) return;
+    const text = webRefs.map((r, i) => formatCitation(r, i + 1, citationStyle)).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`${webRefs.length} sitasi ${citationStyle.toUpperCase()} disalin`);
+    } catch {
+      showToast("⚠️ Gagal menyalin daftar pustaka");
+    }
   }
 
   const firstName = user?.full_name?.split(" ")[0] || user?.email.split("@")[0];
@@ -865,6 +1087,10 @@ export default function BerandaPage() {
     );
   }, [activeDiagramXml]);
 
+  // Diagram diprioritaskan kalau keduanya aktif; kanvas laporan menyusul.
+  const showReportCanvas = Boolean(reportDraft && isReportOpen && !activeDiagramXml);
+  const isSplitView = Boolean(activeDiagramXml) || showReportCanvas;
+
   return (
     <div className="flex h-[100dvh] w-full flex-col relative bg-[#F4F4F5] text-gray-900 selection:bg-blue-200">
       {/* Floating Workspace Quick Tools Dock - Auto-Shift Left when Token Analytics Open */}
@@ -895,6 +1121,58 @@ export default function BerandaPage() {
               <Bot className="h-5 w-5" />
               <span className="absolute right-12 top-1.5 hidden group-hover:block whitespace-nowrap rounded-none bg-gray-900 backdrop-blur-md px-3 py-1.5 text-[11px] font-medium text-white shadow-sm z-50">
                 AI Spesialis
+              </span>
+            </Button>
+
+            {/* Referensi & Sitasi Instan */}
+            <Button
+              isIconOnly
+              onPress={() => setShowRefPanel(!showRefPanel)}
+              className={`group relative flex h-10 w-10 items-center justify-center rounded-none bg-transparent border transition-all ${showRefPanel
+                ? "border-gray-900 bg-gray-900 text-white"
+                : "border-transparent text-gray-500 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              aria-label="Referensi & Sitasi"
+            >
+              <BookMarked className="h-5 w-5" />
+              {webRefs.length > 0 && (
+                <span className="absolute -top-0.5 -left-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white">
+                  {webRefs.length}
+                </span>
+              )}
+              <span className="absolute right-12 top-1.5 hidden group-hover:block whitespace-nowrap rounded-none bg-gray-900 backdrop-blur-md px-3 py-1.5 text-[11px] font-medium text-white shadow-sm z-50">
+                Referensi & Sitasi
+              </span>
+            </Button>
+
+            {/* Kanvas Laporan — hanya muncul kalau AI memang menulis laporan */}
+            {reportDraft && (
+              <Button
+                isIconOnly
+                onPress={() => setIsReportOpen(!isReportOpen)}
+                className={`group relative flex h-10 w-10 items-center justify-center rounded-none bg-transparent border transition-all ${isReportOpen
+                  ? "border-[#0011ff] bg-[#0011ff] text-white"
+                  : "border-transparent text-gray-500 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                  }`}
+                aria-label="Kanvas Laporan"
+              >
+                <ScrollText className="h-5 w-5" />
+                <span className="absolute right-12 top-1.5 hidden group-hover:block whitespace-nowrap rounded-none bg-gray-900 backdrop-blur-md px-3 py-1.5 text-[11px] font-medium text-white shadow-sm z-50">
+                  Kanvas Laporan
+                </span>
+              </Button>
+            )}
+
+            {/* Simpan balasan terakhir ke Catatan */}
+            <Button
+              isIconOnly
+              onPress={handleSaveToWorkspace}
+              className="group relative flex h-10 w-10 items-center justify-center rounded-none bg-transparent text-gray-500 border border-transparent hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
+              aria-label="Simpan ke Catatan"
+            >
+              <BookmarkPlus className="h-5 w-5" />
+              <span className="absolute right-12 top-1.5 hidden group-hover:block whitespace-nowrap rounded-none bg-gray-900 backdrop-blur-md px-3 py-1.5 text-[11px] font-medium text-white shadow-sm z-50">
+                Simpan ke Catatan
               </span>
             </Button>
 
@@ -953,16 +1231,128 @@ export default function BerandaPage() {
         )}
       </div>
 
+      {/* Panel Referensi & Sitasi Instan */}
+      {showRefPanel && (
+        <div className="fixed top-20 right-[76px] z-30 w-[360px] max-h-[70vh] flex flex-col border border-gray-200 bg-white shadow-xl animate-in fade-in slide-in-from-right-2">
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+            <span className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-gray-900">
+              <BookMarked className="h-4 w-4" /> Referensi ({webRefs.length})
+            </span>
+            <Button
+              isIconOnly
+              onPress={() => setShowRefPanel(false)}
+              className="h-7 w-7 min-w-7 rounded-none bg-transparent text-gray-400 hover:text-gray-900"
+              aria-label="Tutup panel referensi"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
 
+          {webRefs.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <Globe className="mx-auto mb-3 h-8 w-8 text-gray-300" />
+              <p className="text-[12px] font-medium text-gray-500">Belum ada rujukan</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+                Minta AI mencari di internet — setiap sumber yang dibukanya muncul di sini
+                dan bisa langsung disalin sebagai sitasi.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2">
+                <div className="flex items-center gap-1">
+                  {CITATION_STYLES.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => setCitationStyle(s.id)}
+                      className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${citationStyle === s.id
+                        ? "bg-gray-900 text-white"
+                        : "text-gray-500 hover:bg-gray-200"
+                        }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={copyAllCitations}
+                  className="flex items-center gap-1 border border-gray-300 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-900 hover:text-white"
+                >
+                  <Copy className="h-3 w-3" /> Salin Semua
+                </button>
+              </div>
+
+              <ol className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {webRefs.map((ref, i) => (
+                  <li key={`${ref.url || ref.title}-${i}`} className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <button
+                        onClick={() => setExpandedRef(expandedRef === i ? null : i)}
+                        className="flex w-full items-start gap-1 text-left"
+                      >
+                        <ChevronRight
+                          className={`mt-0.5 h-3 w-3 shrink-0 text-gray-400 transition-transform ${expandedRef === i ? "rotate-90" : ""}`}
+                        />
+                        <span className={`text-[12px] font-semibold text-gray-900 ${expandedRef === i ? "" : "line-clamp-2"}`}>
+                          {ref.title}
+                        </span>
+                      </button>
+
+                      {ref.url && (
+                        <button
+                          onClick={() => setPreviewSource(ref)}
+                          title="Buka pratinjau sumber di dalam aplikasi"
+                          className="ml-4 mt-0.5 flex w-full items-center gap-1 truncate text-left text-[10px] text-blue-600 hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{siteNameOf(ref.url) || ref.url}</span>
+                          {isPdfUrl(ref.url) && (
+                            <span className="shrink-0 bg-red-50 px-1 text-[8px] font-bold uppercase text-red-600">pdf</span>
+                          )}
+                        </button>
+                      )}
+
+                      {expandedRef === i && (
+                        <div className="ml-4 mt-2 space-y-2">
+                          {ref.snippet ? (
+                            <p className="border-l-2 border-gray-200 pl-2 text-[11px] italic leading-relaxed text-gray-500">
+                              {ref.snippet}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] italic text-gray-400">Tidak ada cuplikan.</p>
+                          )}
+                          <p className="bg-gray-50 p-2 text-[10px] leading-relaxed text-gray-600">
+                            {formatCitation(ref, i + 1, citationStyle)}
+                          </p>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => copyCitation(ref, i)}
+                        className="ml-4 mt-1.5 flex items-center gap-1 border border-gray-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-900 hover:text-white"
+                      >
+                        <Quote className="h-3 w-3" /> Salin {citationStyle}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Main Split Screen Area */}
       <PanelGroup
-        key={activeDiagramXml ? "split-mode" : "single-mode"}
-        id={activeDiagramXml ? "chat-layout-split" : "chat-layout-single"}
+        key={isSplitView ? "split-mode" : "single-mode"}
+        id={isSplitView ? "chat-layout-split" : "chat-layout-single"}
         orientation="horizontal"
         className="flex-1 overflow-hidden min-h-0"
       >
-        <Panel id="chat-panel" defaultSize={activeDiagramXml ? 50 : 100} className="flex flex-col relative h-full min-h-0">
+        <Panel id="chat-panel" defaultSize={isSplitView ? 50 : 100} className="flex flex-col relative h-full min-h-0">
           {/* Chat Messages Area */}
           {isInChat ? (
             <div className="flex-1 overflow-y-auto min-h-0 px-6 py-8">
@@ -976,10 +1366,36 @@ export default function BerandaPage() {
                     onRegenerate={handleRegenerate}
                     onSaveEditPrompt={handleSaveEditPrompt}
                     isSubmitting={isSubmitting}
+                    isStreaming={isSubmitting && i === chatMessages.length - 1 && msg.role === "assistant"}
                   />
                 ))}
 
 
+
+                {/* Menu laporan di dalam chat — jalan pintas ke kanvas & editor */}
+                {reportDraft && !isSubmitting && (
+                  <div className="flex flex-wrap items-center gap-2 border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+                    <ScrollText className="h-4 w-4 shrink-0 text-[#0011ff]" />
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-gray-900" title={reportDraft.title}>
+                      {reportDraft.title}
+                    </span>
+                    <button
+                      onClick={() => setIsReportOpen((v) => !v)}
+                      className="flex items-center gap-1.5 border border-gray-200 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      <Maximize className="h-3 w-3" />
+                      {isReportOpen ? "Tutup Kanvas" : "Buka Kanvas"}
+                    </button>
+                    <button
+                      onClick={openReportEditor}
+                      disabled={isOpeningReport}
+                      className="flex items-center gap-1.5 bg-[#0011ff] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {isOpeningReport ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenLine className="h-3 w-3" />}
+                      Menu Laporan
+                    </button>
+                  </div>
+                )}
 
                 {/* Fathoming... Clean Thinking View (Disalin dari Screenshot) */}
                 {isSubmitting && (
@@ -998,19 +1414,19 @@ export default function BerandaPage() {
             <div className="flex flex-1 flex-col items-center justify-center px-6">
               <h1 className="mb-4 text-5xl font-black font-serif uppercase tracking-tighter text-gray-900 text-center">NALAR AI</h1>
               <p className="max-w-md text-center text-[10px] font-mono tracking-widest uppercase text-gray-500">
-                Unggah materi belajarmu di menu <span className="font-bold text-gray-900">Materi Saya</span>, lalu
-                tanyakan apa saja tentang isinya di sini.
+                Lampirkan materi belajarmu langsung di kolom chat, lalu tanyakan apa saja
+                tentang isinya di sini.
               </p>
 
               {/* Quick actions */}
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link
-                  href="/materi-saya"
+                <button
+                  onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-2 rounded-none border border-gray-200 bg-white shadow-sm px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-900 transition-all hover:border-gray-300 hover:bg-gray-50"
                 >
                   <FileText className="h-4 w-4 text-gray-900" />
-                  Kelola Materi
-                </Link>
+                  Lampirkan Materi
+                </button>
                 <Link
                   href="/latihan-soal"
                   className="flex items-center gap-2 rounded-none border border-gray-200 bg-white shadow-sm px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-900 transition-all hover:border-gray-300 hover:bg-gray-50"
@@ -1627,6 +2043,21 @@ export default function BerandaPage() {
                               <div className="flex flex-col items-start">
                                 <span className="font-medium text-[13px]">{config.name}</span>
                                 <span className="text-[10px] text-gray-900/60 font-normal">{config.model_name}</span>
+                                {/* Lencana kemampuan supaya jelas model mana yang bisa baca gambar / pakai tool */}
+                                {(config.capabilities ?? []).length > 1 && (
+                                  <span className="mt-1 flex flex-wrap gap-1">
+                                    {(config.capabilities ?? [])
+                                      .filter((c) => c !== "text")
+                                      .map((c) => (
+                                        <span
+                                          key={c}
+                                          className="bg-gray-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-gray-500"
+                                        >
+                                          {CAPABILITY_LABEL[c] ?? c}
+                                        </span>
+                                      ))}
+                                  </span>
+                                )}
                               </div>
                               {config.id === activeConfig?.id && <Check className="h-4 w-4 text-primary" />}
                             </button>
@@ -1683,7 +2114,76 @@ export default function BerandaPage() {
             </Panel>
           </>
         )}
+
+        {/* Kanvas Laporan — terbuka otomatis saat AI menulis laporan */}
+        {showReportCanvas && reportDraft && (
+          <>
+            <PanelResizeHandle className="w-1.5 bg-gray-200 hover:bg-[#0011ff] transition-colors cursor-col-resize flex flex-col items-center justify-center shadow-[inset_1px_0_0_rgba(0,0,0,0.05)]">
+              <div className="h-10 w-0.5 rounded-full bg-gray-400" />
+            </PanelResizeHandle>
+            <Panel id="report-panel" defaultSize={50} className="flex flex-col bg-white h-full relative border-l border-gray-300 min-h-0">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <ScrollText className="h-4 w-4 shrink-0 text-[#0011ff]" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-bold text-gray-900" title={reportDraft.title}>
+                      {reportDraft.title}
+                    </p>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-gray-400">
+                      Kanvas Laporan
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    onClick={copyReport}
+                    title="Salin isi laporan"
+                    className="flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={openReportEditor}
+                    disabled={isOpeningReport}
+                    className="flex items-center gap-1.5 bg-[#0011ff] px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {isOpeningReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PenLine className="h-3.5 w-3.5" />}
+                    Editor Laporan
+                  </button>
+                  <button
+                    onClick={() => setIsReportOpen(false)}
+                    title="Tutup kanvas"
+                    className="flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
+                <article
+                  className="prose prose-sm max-w-none prose-headings:font-serif prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-a:text-[#0011ff]"
+                  dangerouslySetInnerHTML={{ __html: reportDraft.html }}
+                />
+                {webRefs.length > 0 && (
+                  <div className="mt-8 border-t border-gray-200 pt-5">
+                    <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-400">
+                      Daftar Pustaka ({citationStyle.toUpperCase()})
+                    </p>
+                    <ol className="space-y-1.5 text-[11px] leading-relaxed text-gray-600">
+                      {webRefs.map((r, i) => (
+                        <li key={i}>{formatCitation(r, i + 1, citationStyle)}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            </Panel>
+          </>
+        )}
       </PanelGroup>
+
+      {/* Pratinjau sumber rujukan di dalam aplikasi */}
+      <ReferenceViewer source={previewSource} onClose={() => setPreviewSource(null)} />
 
       {/* Floating Toast Notification */}
       {toastMsg && (

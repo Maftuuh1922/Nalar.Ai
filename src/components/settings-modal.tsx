@@ -1,17 +1,28 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ApiError, settingsApi } from "@/lib/api";
-import type { ModelConfig } from "@/lib/types";
-import { 
-  X, User, Palette, Cpu, Database, Network, MessageSquare, Box, Users,
-  Monitor, Sun, Moon, Plus, Trash2, CheckCircle2, ArrowUpRight, 
-  Wrench, Plug, SlidersHorizontal, Paperclip, HardDrive, Check,
-  ChevronDown, ChevronRight, Play, Pencil, Eye, EyeOff
+import { agentsApi, ApiError, preferencesApi, settingsApi } from "@/lib/api";
+import type {
+  Agent,
+  DetectResult,
+  ModelCapability,
+  ModelConfig,
+  UserPreference,
+  UserPreferenceUpdate,
+} from "@/lib/types";
+import {
+  X, User, Palette, Cpu, Database, Network, MessageSquare, Bot, Users,
+  Monitor, Sun, Moon, Plus, Trash2, CheckCircle2, ArrowUpRight,
+  Wrench, Plug, SlidersHorizontal, Paperclip, FileText, Check,
+  ChevronDown, ChevronRight, Play, Pencil, Eye, EyeOff,
+  Image as ImageIcon, Code2, Volume2, Brain, Type, Wand2, Loader2,
+  AlertTriangle, MinusCircle, Zap
 } from "lucide-react";
 
 import { useLanguage } from "@/lib/i18n";
+import { useToast } from "@/components/toast-provider";
 
 type SettingsTab = "general" | "appearance" | "models" | "network" | "chat" | "knowledge" | "agents" | "memory";
 
@@ -106,7 +117,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <SidebarItem icon={Cpu} label={t("models")} active={activeTab === "models"} onClick={() => setActiveTab("models")} theme={theme} />
             <SidebarItem icon={Network} label={t("network")} active={activeTab === "network"} onClick={() => setActiveTab("network")} theme={theme} />
             <SidebarItem icon={MessageSquare} label={t("chat")} active={activeTab === "chat"} onClick={() => setActiveTab("chat")} theme={theme} />
-            <SidebarItem icon={HardDrive} label={t("knowledge")} active={activeTab === "knowledge"} onClick={() => setActiveTab("knowledge")} theme={theme} />
+            <SidebarItem icon={FileText} label={t("knowledge")} active={activeTab === "knowledge"} onClick={() => setActiveTab("knowledge")} theme={theme} />
             <SidebarItem icon={Users} label={t("partners")} active={activeTab === "agents"} onClick={() => setActiveTab("agents")} theme={theme} />
           </div>
 
@@ -133,26 +144,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {/* Action Bar (shown on specific tabs) */}
             {["models"].includes(activeTab) && (
               <div className={`flex items-center justify-between mb-8 pb-4 border-b transition-colors duration-300 ${theme === "dark" ? "border-[#2C2C2C]" : "border-white/30"}`}>
-                <div className="text-sm font-medium text-amber-500">
-                  {t("draftUnsaved" as any) || "Draft has unsaved changes"}
+                <div className="text-sm text-white/60">
+                  Simpan profil model agar dipakai di seluruh fitur.
                 </div>
-                <div className="flex items-center gap-3">
-                  <button className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-none transition-colors shadow-none border ${theme === "dark" ? "bg-transparent border-[#3E3E3E] text-gray-300 hover:bg-[#2C2C2C]" : "bg-transparent border-white/30 text-white/80 hover:bg-transparent"}`}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5L21 3m-7.5 7.5L9 21v-7.5H3l18-18-7.5 18z" /></svg>
-                    {t("tour" as any) || "Tour"}
-                  </button>
-                  <button className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-none transition-colors shadow-none border ${theme === "dark" ? "bg-transparent border-[#3E3E3E] text-gray-300 hover:bg-[#2C2C2C]" : "bg-transparent border-white/30 text-white/80 hover:bg-transparent"}`}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
-                    {t("saveDraft" as any) || "Save Draft"}
-                  </button>
-                  <button 
-                    onClick={() => setSaveTrigger(prev => prev + 1)}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-none shadow-none transition-colors border ${theme === "dark" ? "bg-transparent text-white hover:bg-transparent border-white/30" : "bg-transparent text-white border-white/30 hover:bg-transparent"}`}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    {t("apply" as any) || "Apply"}
-                  </button>
-                </div>
+                <button
+                  onClick={() => setSaveTrigger(prev => prev + 1)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-none shadow-none transition-colors border ${theme === "dark" ? "text-white border-[#3E3E3E] hover:bg-[#2C2C2C]" : "text-white border-white/30 hover:bg-white/10"}`}
+                >
+                  <Check className="h-4 w-4" />
+                  Simpan Profil
+                </button>
               </div>
             )}
 
@@ -162,7 +163,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {activeTab === "network" && <NetworkTab />}
             {activeTab === "chat" && <ChatTab />}
             {activeTab === "knowledge" && <KnowledgeTab />}
-            {activeTab === "agents" && <AgentsTab />}
+            {activeTab === "agents" && <AgentsTab onClose={onClose} />}
             {activeTab === "memory" && <MemoryTab />}
           </div>
         </div>
@@ -348,41 +349,40 @@ function AppearanceTab({ theme, setTheme, resolvedTheme }: { theme: "cream" | "d
 
 // --- MODELS (Multi-tabbed: LLM, Embedding, STT, TTS) ---
 function ModelsTab({ theme, saveTrigger }: { theme: string; saveTrigger: number }) {
-  const [subTab, setSubTab] = useState<"llm" | "embedding" | "stt" | "tts">("llm");
-  
   return (
     <div className="max-w-5xl animate-in fade-in duration-200">
-      {/* Sub-nav */}
-      <div className="flex items-center gap-6 border-b border-white/30 mb-6">
-        <SubNavBtn label="Language Models" active={subTab === "llm"} onClick={() => setSubTab("llm")} />
-        <SubNavBtn label="Embedding" active={subTab === "embedding"} onClick={() => setSubTab("embedding")} />
-        <SubNavBtn label="Speech-to-Text" active={subTab === "stt"} onClick={() => setSubTab("stt")} />
-        <SubNavBtn label="Text-to-Speech" active={subTab === "tts"} onClick={() => setSubTab("tts")} />
-      </div>
-
-      <div className="pt-2">
-        {subTab === "llm" && <ModelsLLM theme={theme} saveTrigger={saveTrigger} />}
-        {subTab === "embedding" && <ModelsEmbedding />}
-        {subTab === "stt" && <ModelsSTT />}
-        {subTab === "tts" && <ModelsTTS />}
-      </div>
+      <ModelsLLM theme={theme} saveTrigger={saveTrigger} />
     </div>
   );
 }
 
-function SubNavBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`pb-3 text-sm font-bold border-b-2 transition-colors ${active ? "border-gray-900 text-white" : "border-transparent text-white/50 hover:text-white/80"}`}
-    >
-      {label}
-    </button>
-  );
+/** Kemampuan model yang bisa dinyalakan/dimatikan user, lengkap dengan penjelasannya. */
+const CAPABILITY_META: {
+  id: ModelCapability;
+  label: string;
+  icon: typeof Type;
+  hint: string;
+}[] = [
+  { id: "text", label: "Teks", icon: Type, hint: "Menjawab dan menulis teks biasa" },
+  { id: "vision", label: "Gambar", icon: ImageIcon, hint: "Bisa membaca lampiran gambar & tangkapan layar" },
+  { id: "tools", label: "Tool / Agen", icon: Wrench, hint: "Bisa mencari di internet & membaca dokumen sendiri" },
+  { id: "reasoning", label: "Penalaran", icon: Brain, hint: "Punya mode berpikir bertahap" },
+  { id: "code", label: "Kode", icon: Code2, hint: "Dioptimalkan untuk menulis kode" },
+  { id: "audio", label: "Audio", icon: Volume2, hint: "Mendukung suara / transkripsi" },
+  { id: "embedding", label: "Embedding", icon: Database, hint: "Membuat vektor untuk pencarian dokumen" },
+];
+
+/** Warna dan ikon untuk tiap status hasil pemeriksaan endpoint. */
+function probeVisual(status: string) {
+  if (status === "ok") return { icon: CheckCircle2, className: "text-emerald-400" };
+  if (status === "warn") return { icon: AlertTriangle, className: "text-amber-400" };
+  if (status === "fail") return { icon: X, className: "text-red-400" };
+  return { icon: MinusCircle, className: "text-white/30" };
 }
 
 function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number }) {
   const { token } = useAuth();
+  const { toastSuccess, toastError } = useToast();
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -399,15 +399,19 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
   const [showApiKey, setShowApiKey] = useState(false);
   const [modelName, setModelName] = useState("");
   const [contextWindow, setContextWindow] = useState("65536");
-  
+  const [embeddingModel, setEmbeddingModel] = useState("nomic-embed-text");
+  // Kemampuan yang dipakai untuk memilih model yang tepat saat chat
+  const [capabilities, setCapabilities] = useState<ModelCapability[]>(["text"]);
+
   // Extra Accordion
   const [extraOpen, setExtraOpen] = useState(false);
   const [apiVersion, setApiVersion] = useState("");
-  
-  // Diagnostics
-  const [diagOpen, setDiagOpen] = useState(false);
-  const [diagStatus, setDiagStatus] = useState<"idle" | "running" | "success" | "error">("idle");
-  const [diagLogs, setDiagLogs] = useState<string[]>([]);
+
+  // Diagnostics — hasil pemeriksaan nyata terhadap endpoint milik user
+  const [diagOpen, setDiagOpen] = useState(true);
+  const [diagStatus, setDiagStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [detectResult, setDetectResult] = useState<DetectResult | null>(null);
+  const [diagError, setDiagError] = useState<string | null>(null);
 
   const isDark = theme === "dark";
 
@@ -438,7 +442,21 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
     setBaseUrl(cfg.base_url);
     setApiKey("");
     setModelName(cfg.model_name);
-    setContextWindow("65536");
+    setContextWindow(String(cfg.context_window ?? 65536));
+    setEmbeddingModel(cfg.embedding_model || "nomic-embed-text");
+    setCapabilities(cfg.capabilities?.length ? cfg.capabilities : ["text"]);
+    // Hasil diagnosa milik profil sebelumnya tidak berlaku untuk profil ini
+    setDetectResult(null);
+    setDiagStatus("idle");
+    setDiagError(null);
+  };
+
+  /** Nyalakan/matikan sebuah kemampuan secara manual. "text" selalu aktif. */
+  const toggleCapability = (cap: ModelCapability) => {
+    if (cap === "text") return;
+    setCapabilities(prev =>
+      prev.includes(cap) ? prev.filter(c => c !== cap) : [...prev, cap]
+    );
   };
 
   useEffect(() => {
@@ -459,14 +477,16 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
     setIsSaving(true);
     setError(null);
     try {
-      const existingCfg = configs.find(c => c.id === selectedConfigId);
       const payload = {
         name,
         base_url: baseUrl,
         api_key: apiKey,
         model_name: modelName,
-        embedding_model: existingCfg?.embedding_model || "nomic-embed-text",
-        is_active: true
+        embedding_model: embeddingModel || "nomic-embed-text",
+        is_active: true,
+        capabilities,
+        provider_type: detectResult?.provider_type || "openai-compatible",
+        context_window: Number(contextWindow) || 65536,
       };
 
       if (selectedConfigId && selectedConfigId !== "new") {
@@ -479,10 +499,11 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
       const data = await settingsApi.getAll(token);
       setConfigs(data);
       window.dispatchEvent(new CustomEvent("settings-updated"));
-      alert("Configuration applied successfully!");
+      toastSuccess("Konfigurasi model berhasil disimpan.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to save configuration.");
-      alert("Error saving configuration!");
+      const msg = err instanceof ApiError ? err.message : "Gagal menyimpan konfigurasi.";
+      setError(msg);
+      toastError(msg);
     } finally {
       setIsSaving(false);
     }
@@ -517,14 +538,39 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
     } catch {}
   };
 
-  const runDiagnostics = () => {
+  /**
+   * Uji koneksi sungguhan ke endpoint: daftar model, satu percakapan kecil,
+   * satu percobaan tool call, satu gambar 1x1 piksel, dan satu embedding.
+   *
+   * @param applyResult bila true, kemampuan hasil deteksi langsung mengisi form.
+   */
+  const runDiagnostics = async (applyResult: boolean) => {
+    if (!token || !baseUrl.trim()) {
+      setDiagError("Base URL belum diisi.");
+      setDiagStatus("error");
+      return;
+    }
     setDiagStatus("running");
-    setDiagLogs(["Initiating test connection...", `Testing endpoint: ${baseUrl}`, "Sending request to get model details..."]);
-    
-    setTimeout(() => {
-      setDiagLogs(prev => [...prev, `Found model: ${modelName}`, "Connection success! (HTTP 200 OK)"]);
-      setDiagStatus("success");
-    }, 1500);
+    setDiagError(null);
+    setDiagOpen(true);
+    try {
+      const result = await settingsApi.detect(token, {
+        base_url: baseUrl.trim(),
+        api_key: apiKey,
+        model_name: modelName.trim(),
+        embedding_model: embeddingModel.trim(),
+        config_id: selectedConfigId && selectedConfigId !== "new" ? selectedConfigId : null,
+      });
+      setDetectResult(result);
+      setDiagStatus("done");
+      if (applyResult) {
+        setCapabilities(result.capabilities.length ? result.capabilities : ["text"]);
+        setContextWindow(String(result.context_window));
+      }
+    } catch (err) {
+      setDiagError(err instanceof ApiError ? err.message : "Gagal menghubungi endpoint.");
+      setDiagStatus("error");
+    }
   };
 
   if (isLoading) {
@@ -739,27 +785,110 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={`text-xs font-medium block mb-1.5 ${isDark ? "text-white/40" : "text-white/70"}`}>Model ID</label>
-                <input 
-                  type="text" 
-                  value={modelName} 
-                  onChange={e => setModelName(e.target.value)} 
+                <input
+                  type="text"
+                  value={modelName}
+                  onChange={e => setModelName(e.target.value)}
+                  list="detected-models"
                   className={`w-full rounded-none px-4 py-2.5 text-sm outline-none border ${
                     isDark ? "bg-[#2C2C2C] border-[#3E3E3E] text-white" : "bg-transparent border-white/30 text-white"
-                  }`} 
+                  }`}
                 />
+                {/* Diisi otomatis setelah diagnosa berhasil membaca daftar model */}
+                <datalist id="detected-models">
+                  {(detectResult?.available_models ?? []).map(m => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+                {detectResult && detectResult.available_models.length > 0 && (
+                  <p className="mt-1 text-[10px] text-white/40">
+                    {detectResult.available_models.length} model terdeteksi — ketik untuk memilih
+                  </p>
+                )}
               </div>
               <div>
                 <label className={`text-xs font-medium block mb-1.5 ${isDark ? "text-white/40" : "text-white/70"}`}>Context Window</label>
-                <input 
-                  type="text" 
-                  value={contextWindow} 
-                  onChange={e => setContextWindow(e.target.value)} 
+                <input
+                  type="text"
+                  value={contextWindow}
+                  onChange={e => setContextWindow(e.target.value)}
                   className={`w-full rounded-none px-4 py-2.5 text-sm outline-none border ${
                     isDark ? "bg-[#2C2C2C] border-[#3E3E3E] text-white" : "bg-transparent border-white/30 text-white"
-                  }`} 
+                  }`}
                 />
               </div>
             </div>
+
+            <div>
+              <label className={`text-xs font-medium block mb-1.5 ${isDark ? "text-white/40" : "text-white/70"}`}>
+                Model Embedding
+              </label>
+              <input
+                type="text"
+                value={embeddingModel}
+                onChange={e => setEmbeddingModel(e.target.value)}
+                placeholder="mis. text-embedding-3-small"
+                className={`w-full rounded-none px-4 py-2.5 text-sm outline-none border ${
+                  isDark ? "bg-[#2C2C2C] border-[#3E3E3E] text-white" : "bg-transparent border-white/30 text-white"
+                }`}
+              />
+              <p className="mt-1 text-[10px] text-white/40">
+                Dipakai untuk mengindeks dan mencari isi berkas yang dilampirkan di chat.
+              </p>
+            </div>
+          </div>
+
+          {/* Kemampuan model — menentukan tugas apa yang boleh dialihkan ke profil ini */}
+          <div className={`rounded-none border p-5 space-y-4 shadow-none backdrop-blur-md transition-colors duration-300 ${isDark ? "bg-[#1E1E1E] border-[#2C2C2C]" : "bg-transparent border-white/30"}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className={`text-sm font-bold ${isDark ? "text-gray-100" : "text-white"}`}>Kemampuan Model</span>
+                <p className="text-[11px] text-white/50 mt-0.5">
+                  Nalar memakai daftar ini untuk memilih model yang tepat — lampiran gambar
+                  hanya dikirim ke model yang mendukungnya.
+                </p>
+              </div>
+              <button
+                onClick={() => runDiagnostics(true)}
+                disabled={diagStatus === "running"}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-white/30 text-white rounded-none hover:bg-white/15 disabled:opacity-50 transition-colors"
+              >
+                {diagStatus === "running" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                Deteksi Otomatis
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {CAPABILITY_META.map(cap => {
+                const active = capabilities.includes(cap.id);
+                const Icon = cap.icon;
+                return (
+                  <button
+                    key={cap.id}
+                    type="button"
+                    onClick={() => toggleCapability(cap.id)}
+                    title={cap.hint}
+                    disabled={cap.id === "text"}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border rounded-none transition-colors ${
+                      active
+                        ? "bg-white text-[#0011ff] border-white"
+                        : "bg-transparent text-white/50 border-white/25 hover:border-white/60 hover:text-white/80"
+                    } ${cap.id === "text" ? "cursor-default" : ""}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {cap.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-white/40">
+              Klik untuk menyalakan/mematikan secara manual, atau tekan Deteksi Otomatis untuk
+              mengujinya langsung ke endpoint.
+            </p>
           </div>
 
           {/* Diagnostics */}
@@ -776,24 +905,80 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
             </button>
 
             {diagOpen && (
-              <div className="mt-4 pt-4 border-t border-[#2C2C2C]/50 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/40 font-medium">Verify your configuration endpoint connection.</span>
-                  <button 
-                    onClick={runDiagnostics}
+              <div className="mt-4 pt-4 border-t border-white/15 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-white/50 font-medium">
+                    Menguji endpoint secara nyata: daftar model, percakapan, tool call, gambar, dan embedding.
+                  </span>
+                  <button
+                    onClick={() => runDiagnostics(false)}
                     disabled={diagStatus === "running"}
-                    className="px-4 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-none hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                    className="shrink-0 px-4 py-1.5 text-xs font-bold bg-white text-[#0011ff] rounded-none hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    Run test
+                    {diagStatus === "running" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    Jalankan Tes
                   </button>
                 </div>
 
-                {diagStatus !== "idle" && (
-                  <div className={`p-4 rounded-none font-mono text-xs space-y-1.5 ${isDark ? "bg-black/40 text-gray-300" : "bg-black/5 text-white"}`}>
-                    {diagLogs.map((log, idx) => (
-                      <div key={idx}>{log}</div>
-                    ))}
-                    {diagStatus === "running" && <div className="animate-pulse">Loading...</div>}
+                {diagStatus === "running" && (
+                  <p className="text-xs text-white/50 animate-pulse">
+                    Menghubungi {baseUrl || "endpoint"}... ini bisa memakan waktu sampai satu menit.
+                  </p>
+                )}
+
+                {diagError && (
+                  <div className="flex items-start gap-2 border border-red-400/40 bg-red-500/10 p-3 text-xs text-red-200">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>{diagError}</span>
+                  </div>
+                )}
+
+                {detectResult && diagStatus !== "running" && (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className={`px-2 py-1 font-bold ${detectResult.reachable ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
+                        {detectResult.reachable ? "Endpoint terhubung" : "Endpoint tidak menjawab"}
+                      </span>
+                      <span className="px-2 py-1 bg-white/10 text-white/70">
+                        Penyedia: {detectResult.provider_type}
+                      </span>
+                      <span className="px-2 py-1 bg-white/10 text-white/70">
+                        Konteks ~{detectResult.context_window.toLocaleString("id-ID")} token
+                      </span>
+                    </div>
+
+                    <ul className="space-y-1.5">
+                      {detectResult.probes.map(p => {
+                        const visual = probeVisual(p.status);
+                        const Icon = visual.icon;
+                        return (
+                          <li key={p.name} className="flex items-start gap-2 text-xs">
+                            <Icon className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${visual.className}`} />
+                            <div className="min-w-0 flex-1">
+                              <span className="font-bold text-white/85">{p.label}</span>
+                              {p.message && <span className="text-white/55"> — {p.message}</span>}
+                            </div>
+                            {p.latency_ms !== null && p.latency_ms !== undefined && (
+                              <span className="shrink-0 flex items-center gap-1 text-[10px] text-white/40">
+                                <Zap className="h-3 w-3" />
+                                {p.latency_ms} ms
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    <button
+                      onClick={() => {
+                        setCapabilities(detectResult.capabilities.length ? detectResult.capabilities : ["text"]);
+                        setContextWindow(String(detectResult.context_window));
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-white/30 text-white rounded-none hover:bg-white/15 transition-colors"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Pakai hasil deteksi ini
+                    </button>
                   </div>
                 )}
               </div>
@@ -806,318 +991,571 @@ function ModelsLLM({ theme, saveTrigger }: { theme: string; saveTrigger: number 
   );
 }
 
-function ModelsEmbedding() {
+// --- PREFERENSI PENGGUNA (dipakai tab Jaringan, Percakapan, Pengetahuan, Memori) ---
+function usePreferences() {
+  const { token } = useAuth();
+  const { toastSuccess, toastError } = useToast();
+  const [prefs, setPrefs] = useState<UserPreference | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    setLoading(true);
+    preferencesApi
+      .get(token)
+      .then((data) => {
+        if (!cancelled) {
+          setPrefs(data);
+          setDirty(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) toastError(err instanceof ApiError ? err.message : "Gagal memuat pengaturan.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  function setField<K extends keyof UserPreference>(key: K, value: UserPreference[K]) {
+    setPrefs((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setDirty(true);
+  }
+
+  /** Simpan hanya field milik tab yang sedang dibuka. */
+  async function save(fields: (keyof UserPreferenceUpdate)[]) {
+    if (!token || !prefs) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {};
+      for (const field of fields) payload[field as string] = prefs[field as keyof UserPreference];
+      const updated = await preferencesApi.update(token, payload as UserPreferenceUpdate);
+      setPrefs(updated);
+      setDirty(false);
+      toastSuccess("Pengaturan tersimpan.");
+    } catch (err) {
+      toastError(err instanceof ApiError ? err.message : "Gagal menyimpan pengaturan.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return { prefs, loading, saving, dirty, setField, save };
+}
+
+function PrefLoading() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-white/70">Configure embedding model profiles. Used by retrieval and knowledge-base ingestion.</p>
-        <button className="flex items-center gap-1.5 text-sm font-medium text-white bg-transparent border border-white/30 px-3 py-1.5 rounded-none shadow-none hover:bg-transparent transition-colors">
-          <Plus className="h-4 w-4" /> Add Profile
-        </button>
-      </div>
-      <div className="rounded-none border border-dashed border-white/30 bg-transparent p-12 flex flex-col items-center justify-center text-center">
-        <p className="text-sm text-white/50 mb-4">No profiles configured. Add a profile to start.</p>
-        <button className="flex items-center gap-1.5 text-sm font-medium text-white/80 bg-transparent border border-white/30 rounded-none px-4 py-2 hover:bg-transparent shadow-none transition-colors">
-          <Plus className="h-4 w-4" /> Profile
-        </button>
-      </div>
+    <div className="flex items-center gap-2 text-sm text-white/60">
+      <Loader2 className="h-4 w-4 animate-spin" /> Memuat pengaturan...
     </div>
   );
 }
 
-function ModelsSTT() {
+function SaveBar({ saving, dirty, onSave }: { saving: boolean; dirty: boolean; onSave: () => void }) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-white/70 max-w-xl">Transcribe the chat composer's microphone recordings. Works with any OpenAI-compatible audio API.</p>
-        <button className="flex items-center gap-1.5 text-sm font-medium text-white bg-transparent border border-white/30 px-3 py-1.5 rounded-none shadow-none hover:bg-transparent transition-colors">
-          <Plus className="h-4 w-4" /> Add Profile
-        </button>
-      </div>
-      <div className="rounded-none border border-dashed border-white/30 bg-transparent p-12 flex flex-col items-center justify-center text-center">
-        <p className="text-sm text-white/50 mb-4">No profiles configured. Add a profile to start.</p>
-        <button className="flex items-center gap-1.5 text-sm font-medium text-white/80 bg-transparent border border-white/30 rounded-none px-4 py-2 hover:bg-transparent shadow-none transition-colors">
-          <Plus className="h-4 w-4" /> Profile
-        </button>
-      </div>
+    <div className="flex items-center gap-3 pt-2">
+      <button
+        onClick={onSave}
+        disabled={saving || !dirty}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-bold border border-white/30 rounded-none text-white transition-colors hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+        {saving ? "Menyimpan..." : "Simpan Perubahan"}
+      </button>
+      {dirty && !saving && <span className="text-xs text-amber-400">Ada perubahan yang belum disimpan.</span>}
     </div>
   );
 }
 
-function ModelsTTS() {
+function FieldRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-white/70 max-w-xl">Read assistant replies aloud from the chat speaker button. Works with any OpenAI-compatible audio API.</p>
-        <button className="flex items-center gap-1.5 text-sm font-medium text-white bg-transparent border border-white/30 px-3 py-1.5 rounded-none shadow-none hover:bg-transparent transition-colors">
-          <Plus className="h-4 w-4" /> Add Profile
-        </button>
+    <div className="flex items-start justify-between gap-6 py-4">
+      <div className="min-w-0">
+        <span className="text-sm font-medium text-white block">{label}</span>
+        {hint && <span className="text-xs text-white/50 block mt-0.5">{hint}</span>}
       </div>
-      <div className="rounded-none border border-dashed border-white/30 bg-transparent p-12 flex flex-col items-center justify-center text-center">
-        <p className="text-sm text-white/50 mb-4">No profiles configured. Add a profile to start.</p>
-        <button className="flex items-center gap-1.5 text-sm font-medium text-white/80 bg-transparent border border-white/30 rounded-none px-4 py-2 hover:bg-transparent shadow-none transition-colors">
-          <Plus className="h-4 w-4" /> Profile
-        </button>
-      </div>
-
-      <section>
-        <h3 className="text-base font-bold text-white mb-1">Playback</h3>
-        <p className="text-sm text-white/50 mb-4">How spoken replies behave in chat.</p>
-        <div className="rounded-none border border-white/30 bg-transparent px-5 py-4 shadow-none backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-sm font-bold text-white block">Auto-play replies</span>
-              <span className="text-xs text-white/50">Read each assistant reply aloud automatically.</span>
-            </div>
-            <ToggleSwitch />
-          </div>
-        </div>
-      </section>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
 
-// --- NETWORK ---
+function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  suffix,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  suffix?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => {
+          const raw = Number(e.target.value);
+          if (Number.isNaN(raw)) return;
+          onChange(Math.min(max, Math.max(min, raw)));
+        }}
+        className="w-28 bg-transparent border border-white/30 rounded-none px-3 py-1.5 text-sm text-white outline-none focus:border-white/60"
+      />
+      {suffix && <span className="text-xs text-white/50">{suffix}</span>}
+    </div>
+  );
+}
+
+// --- JARINGAN ---
 function NetworkTab() {
+  const { prefs, loading, saving, dirty, setField, save } = usePreferences();
+
+  if (loading || !prefs) return <PrefLoading />;
+
   return (
     <div className="space-y-6 max-w-3xl animate-in fade-in duration-200">
-      <p className="text-sm text-white/70">Configure proxy and network settings for outgoing API requests.</p>
-      <div className="rounded-none border border-white/30 bg-transparent p-6 shadow-none backdrop-blur-md">
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-white/80 mb-1.5 block uppercase tracking-wider">Proxy URL (Optional)</label>
-            <input type="text" placeholder="http://proxy.example.com:8080" className="w-full bg-black/5 border border-transparent rounded-none px-4 py-2.5 text-sm outline-none focus:bg-transparent focus:border-white/30 shadow-none transition-colors" />
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="bypassLocal" defaultChecked className="h-4 w-4 rounded border-white/30" />
-            <label htmlFor="bypassLocal" className="text-sm font-medium text-white/80">Bypass proxy for localhost</label>
-          </div>
+      <p className="text-sm text-white/70">
+        Atur proxy dan batas waktu untuk permintaan chat ke penyedia model AI.
+      </p>
+
+      <div className="rounded-none border border-white/30 bg-transparent p-6 shadow-none backdrop-blur-md space-y-5">
+        <div>
+          <label className="text-xs font-bold text-white/80 mb-1.5 block uppercase tracking-wider">
+            URL Proxy (opsional)
+          </label>
+          <input
+            type="text"
+            value={prefs.proxy_url ?? ""}
+            onChange={(e) => setField("proxy_url", e.target.value)}
+            placeholder="http://proxy.contoh.com:8080"
+            className="w-full bg-transparent border border-white/30 rounded-none px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/60 transition-colors"
+          />
+          <p className="text-xs text-white/50 mt-1.5">
+            Kosongkan bila koneksi langsung. Dipakai saat chat dan pembuatan saran pertanyaan.
+          </p>
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={prefs.bypass_proxy_local}
+            onChange={(e) => setField("bypass_proxy_local", e.target.checked)}
+            className="h-4 w-4 accent-white"
+          />
+          <span className="text-sm font-medium text-white/80">
+            Lewati proxy untuk alamat lokal (localhost, 127.0.0.1)
+          </span>
+        </label>
+
+        <div className="border-t border-white/20 pt-2">
+          <FieldRow
+            label="Batas waktu permintaan"
+            hint="Berapa lama menunggu jawaban model sebelum dianggap gagal. 10-900 detik."
+          >
+            <NumberInput
+              value={prefs.request_timeout}
+              onChange={(v) => setField("request_timeout", v)}
+              min={10}
+              max={900}
+              step={10}
+              suffix="detik"
+            />
+          </FieldRow>
         </div>
       </div>
+
+      <SaveBar
+        saving={saving}
+        dirty={dirty}
+        onSave={() => save(["proxy_url", "bypass_proxy_local", "request_timeout"])}
+      />
     </div>
   );
 }
 
-// --- CHAT (Skills) ---
+// --- PERCAKAPAN ---
 function ChatTab() {
-  return (
-    <div className="space-y-6 max-w-4xl animate-in fade-in duration-200">
-      <p className="text-sm text-white/70">Tools, MCP servers, capabilities, and attachments.</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Tools */}
-        <div className="rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative shadow-none backdrop-blur-md">
-          <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="flex items-center gap-4 mb-4">
-            <div className="h-10 w-10 rounded-none bg-black/5 flex items-center justify-center border border-white/30">
-              <Wrench className="h-5 w-5 text-white/80" />
-            </div>
-            <h3 className="text-base font-bold text-white">Tools</h3>
-          </div>
-          <p className="text-sm text-white/50">
-            Built-in tools the chat agent can invoke.
-          </p>
-        </div>
+  const { prefs, loading, saving, dirty, setField, save } = usePreferences();
 
-        {/* MCP Servers */}
-        <div className="rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative shadow-none backdrop-blur-md">
-          <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="flex items-center gap-4 mb-4">
-            <div className="h-10 w-10 rounded-none bg-black/5 flex items-center justify-center border border-white/30">
-              <Plug className="h-5 w-5 text-blue-600" />
-            </div>
-            <h3 className="text-base font-bold text-white">MCP servers</h3>
-          </div>
-          <p className="text-sm text-white/50">
-            External MCP servers shared by the deployment.
-          </p>
-        </div>
+  if (loading || !prefs) return <PrefLoading />;
 
-        {/* Capabilities */}
-        <div className="rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative shadow-none backdrop-blur-md">
-          <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="flex items-center gap-4 mb-4">
-            <div className="h-10 w-10 rounded-none bg-black/5 flex items-center justify-center border border-white/30">
-              <SlidersHorizontal className="h-5 w-5 text-white/80" />
-            </div>
-            <h3 className="text-base font-bold text-white">Capabilities</h3>
-          </div>
-          <p className="text-sm text-white/50">
-            Per-capability LLM parameters and runtime knobs.
-          </p>
-        </div>
-
-        {/* Attachments */}
-        <div className="rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative shadow-none backdrop-blur-md">
-          <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="flex items-center gap-4 mb-4">
-            <div className="h-10 w-10 rounded-none bg-black/5 flex items-center justify-center border border-white/30">
-              <Paperclip className="h-5 w-5 text-emerald-600" />
-            </div>
-            <h3 className="text-base font-bold text-white">Attachments</h3>
-          </div>
-          <p className="text-sm text-white/50">
-            Upload caps and extraction budgets for chat attachments.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- KNOWLEDGE BASE ---
-function KnowledgeTab() {
-  return (
-    <div className="space-y-8 max-w-4xl animate-in fade-in duration-200">
-      <section>
-        <h3 className="text-xl font-bold text-white mb-2">Document Parsing</h3>
-        <p className="text-sm text-white/70">
-          How uploaded documents are converted into text for knowledge bases and question generation. Pick an engine and its options. Local model downloads are off by default.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="text-base font-bold text-white mb-2">Engine</h3>
-        <p className="text-sm text-white/70 mb-4">
-          The active engine handles all parsing. Text-only is built in and extracts plain text; markitdown is lightweight and optional; MinerU and Docling produce richer structure.
-        </p>
-        
-        <div className="space-y-3">
-          {/* Text-only */}
-          <div className="rounded-none border border-white/30 bg-transparent p-4 cursor-pointer hover:border-white/30 transition-colors shadow-none backdrop-blur-md">
-            <div className="flex items-center gap-3 mb-1">
-              <span className="font-bold text-white">Text-only</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-white/80 px-2 py-0.5 rounded-none">Active</span>
-            </div>
-            <p className="text-sm text-white/70">
-              Built-in plain text extraction for PDF/Office/text files. No optional parser package, no model download, no layout structure.
-            </p>
-          </div>
-
-          {/* MinerU */}
-          <div className="rounded-none border border-white/30 bg-transparent p-4 cursor-pointer hover:border-white/30 transition-colors shadow-none backdrop-blur-md">
-            <div className="flex items-center gap-3 mb-1">
-              <span className="font-bold text-white">MinerU</span>
-            </div>
-            <p className="text-sm text-white/70">
-              Highest-fidelity multimodal parsing (layout, tables, formulas). Local CLI downloads models, or use the hosted cloud API. PDF only.
-            </p>
-          </div>
-
-          {/* Docling */}
-          <div className="rounded-none border border-white/30 bg-transparent p-4 cursor-pointer hover:border-white/30 transition-colors shadow-none backdrop-blur-md">
-            <div className="flex items-center gap-3 mb-1">
-              <span className="font-bold text-white">Docling</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider border border-white/30 text-white/50 px-2 py-0.5 rounded-none">Not installed</span>
-            </div>
-            <p className="text-sm text-white/70">
-              Structured document conversion (layout/tables). Downloads local models on first run. PDF/Office/HTML/images.
-            </p>
-          </div>
-
-          {/* markitdown */}
-          <div className="rounded-none border border-white/30 bg-transparent p-4 cursor-pointer hover:border-white/30 transition-colors shadow-none backdrop-blur-md">
-            <div className="flex items-center gap-3 mb-1">
-              <span className="font-bold text-white">markitdown</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider border border-white/30 text-white/50 px-2 py-0.5 rounded-none">Not installed</span>
-            </div>
-            <p className="text-sm text-white/70">
-              Lightweight, no model downloads — broad format support, Markdown output. Works out of the box.
-            </p>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// --- PARTNERS & AGENTS ---
-function AgentsTab() {
   return (
     <div className="space-y-6 max-w-3xl animate-in fade-in duration-200">
-      <p className="text-sm text-white/70">Configure the subagents you can call on in chat.</p>
-      <div className="rounded-none border border-dashed border-white/30 bg-transparent p-8 text-center text-sm text-white/50">
-        No external partners configured.
-      </div>
-    </div>
-  );
-}
+      <p className="text-sm text-white/70">
+        Setelan ini langsung dipakai saat kamu mengobrol di halaman Beranda.
+      </p>
 
-// --- MEMORY ---
-function MemoryTab() {
-  return (
-    <div className="space-y-8 max-w-3xl animate-in fade-in duration-200">
-      {/* Top switches */}
-      <div className="rounded-none border border-white/30 bg-transparent px-5 py-2 divide-y divide-white/30 shadow-none backdrop-blur-md">
-        <div className="flex items-center justify-between py-4">
-          <span className="text-sm font-medium text-white">Merge automatically after Audit</span>
-          <ToggleSwitch defaultChecked />
-        </div>
-        <div className="flex items-center justify-between py-4">
-          <span className="text-sm font-medium text-white">Merge automatically after Dedup</span>
-          <ToggleSwitch defaultChecked />
-        </div>
-      </div>
-
-      {/* Chunking Section */}
       <section>
-        <h3 className="text-base font-bold text-white mb-1">Chunking</h3>
-        <p className="text-sm text-white/50 mb-4">Lower-level knobs that shape how content is split.</p>
-        
-        <div className="rounded-none border border-white/30 bg-transparent px-5 py-2 divide-y divide-white/30 shadow-none backdrop-blur-md">
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <span className="text-sm font-medium text-white block">Overlap ratio</span>
-              <span className="text-xs text-white/50">Fraction of chunk size carried into the next chunk. 0-0.5.</span>
-            </div>
-            <div className="flex items-center bg-black/5 rounded-none px-3 py-1.5 border border-transparent">
-              <span className="text-sm font-medium text-white mr-2">0,1</span>
-              <div className="flex flex-col">
-                <div className="h-2 w-3 bg-gray-300 mb-0.5 rounded-none" />
-                <div className="h-2 w-3 bg-gray-300 rounded-none" />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <span className="text-sm font-medium text-white block">Boundary</span>
-              <span className="text-xs text-white/50">Where the chunker prefers to cut.</span>
-            </div>
-            <div className="flex rounded-none bg-black/5 p-1 border border-transparent">
-              <button className="px-4 py-1.5 text-xs font-medium bg-transparent text-white rounded-none shadow-none">Paragraph</button>
-              <button className="px-4 py-1.5 text-xs font-medium text-white/50 hover:text-white">Sentence</button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <span className="text-sm font-medium text-white block">Min chunk chars</span>
-              <span className="text-xs text-white/50">Floor for individual chunk size.</span>
-            </div>
-            <div className="flex items-center bg-black/5 rounded-none px-3 py-1.5 border border-transparent">
-              <span className="text-sm font-medium text-white mr-2">1000</span>
-              <div className="flex flex-col">
-                <div className="h-2 w-3 bg-gray-300 mb-0.5 rounded-none" />
-                <div className="h-2 w-3 bg-gray-300 rounded-none" />
-              </div>
-            </div>
-          </div>
+        <h3 className="text-base font-bold text-white mb-1">Parameter Model</h3>
+        <p className="text-sm text-white/50 mb-3">Mengatur gaya dan panjang jawaban AI.</p>
+        <div className="rounded-none border border-white/30 bg-transparent px-5 py-2 divide-y divide-white/20 shadow-none backdrop-blur-md">
+          <FieldRow
+            label="Temperature"
+            hint="Makin kecil makin konsisten, makin besar makin kreatif. 0 - 2."
+          >
+            <NumberInput
+              value={prefs.chat_temperature}
+              onChange={(v) => setField("chat_temperature", v)}
+              min={0}
+              max={2}
+              step={0.1}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Maksimum token jawaban"
+            hint="Batas panjang satu jawaban. Terlalu kecil membuat jawaban terpotong."
+          >
+            <NumberInput
+              value={prefs.chat_max_tokens}
+              onChange={(v) => setField("chat_max_tokens", v)}
+              min={256}
+              max={64000}
+              step={256}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Riwayat yang diingat"
+            hint="Jumlah pesan terakhir yang ikut dikirim sebagai konteks. 0 - 50."
+          >
+            <NumberInput
+              value={prefs.history_limit}
+              onChange={(v) => setField("history_limit", v)}
+              min={0}
+              max={50}
+              suffix="pesan"
+            />
+          </FieldRow>
         </div>
       </section>
+
+      <section>
+        <h3 className="text-base font-bold text-white mb-1">Kemampuan Asisten</h3>
+        <p className="text-sm text-white/50 mb-3">
+          Matikan salah satunya bila kamu ingin jawaban murni dari model tanpa alat bantu.
+        </p>
+        <div className="rounded-none border border-white/30 bg-transparent px-5 py-2 divide-y divide-white/20 shadow-none backdrop-blur-md">
+          <FieldRow label="Pencarian web" hint="Alat search_web dan fetch_webpage.">
+            <ToggleSwitch
+              checked={prefs.enable_web_tools}
+              onChange={(v) => setField("enable_web_tools", v)}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Akses dokumen"
+            hint="Alat list_documents, read_document, dan search_in_document."
+          >
+            <ToggleSwitch
+              checked={prefs.enable_document_tools}
+              onChange={(v) => setField("enable_document_tools", v)}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Saran pertanyaan lanjutan"
+            hint="Tiga usulan pertanyaan yang muncul setelah AI menjawab."
+          >
+            <ToggleSwitch
+              checked={prefs.enable_suggestions}
+              onChange={(v) => setField("enable_suggestions", v)}
+            />
+          </FieldRow>
+        </div>
+      </section>
+
+      <SaveBar
+        saving={saving}
+        dirty={dirty}
+        onSave={() =>
+          save([
+            "chat_temperature",
+            "chat_max_tokens",
+            "history_limit",
+            "enable_web_tools",
+            "enable_document_tools",
+            "enable_suggestions",
+          ])
+        }
+      />
     </div>
   );
 }
 
-// Utility component for toggles
-function ToggleSwitch({ defaultChecked = false }: { defaultChecked?: boolean }) {
-  const [checked, setChecked] = useState(defaultChecked);
+// --- PUSAT PENGETAHUAN ---
+function KnowledgeTab() {
+  const { prefs, loading, saving, dirty, setField, save } = usePreferences();
+
   return (
-    <button 
-      onClick={() => setChecked(!checked)}
-      className={`relative h-6 w-11 rounded-none transition-colors focus:outline-none shadow-none ${checked ? 'bg-gray-900' : 'bg-gray-300'}`}
+    <div className="space-y-6 max-w-3xl animate-in fade-in duration-200">
+      <div>
+        <h3 className="text-xl font-bold text-white mb-1">Pengolahan Dokumen</h3>
+        <p className="text-sm text-white/70">
+          Menentukan bagaimana berkas yang kamu lampirkan di kolom chat dipotong dan
+          dicari kembali saat AI menjawab.
+        </p>
+      </div>
+
+      {loading || !prefs ? (
+        <PrefLoading />
+      ) : (
+        <>
+          <div className="rounded-none border border-white/30 bg-transparent px-5 py-2 divide-y divide-white/20 shadow-none backdrop-blur-md">
+            <FieldRow
+              label="Ukuran potongan (chunk)"
+              hint="Jumlah token per potongan teks. Potongan besar menjaga konteks, potongan kecil lebih presisi. 128 - 4000."
+            >
+              <NumberInput
+                value={prefs.chunk_size}
+                onChange={(v) => setField("chunk_size", v)}
+                min={128}
+                max={4000}
+                step={64}
+              />
+            </FieldRow>
+            <FieldRow
+              label="Tumpang tindih (overlap)"
+              hint="Berapa token dari potongan sebelumnya diulang agar kalimat tidak terputus. Otomatis dibatasi setengah ukuran potongan."
+            >
+              <NumberInput
+                value={prefs.chunk_overlap}
+                onChange={(v) => setField("chunk_overlap", v)}
+                min={0}
+                max={1000}
+                step={16}
+              />
+            </FieldRow>
+            <FieldRow
+              label="Jumlah potongan diambil"
+              hint="Dipakai saat AI mencari isi dokumen di chat dan saat menyusun bahan latihan soal. 1 - 30."
+            >
+              <NumberInput
+                value={prefs.retrieval_top_k}
+                onChange={(v) => setField("retrieval_top_k", v)}
+                min={1}
+                max={30}
+              />
+            </FieldRow>
+          </div>
+
+          <div className="flex items-start gap-2 text-xs text-white/60 border border-white/20 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              Ukuran potongan dan tumpang tindih hanya berlaku untuk dokumen yang diunggah setelah
+              disimpan. Dokumen lama perlu diunggah ulang agar memakai setelan baru.
+            </span>
+          </div>
+
+          <SaveBar
+            saving={saving}
+            dirty={dirty}
+            onSave={() => save(["chunk_size", "chunk_overlap", "retrieval_top_k"])}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- PARTNER & AGEN ---
+function AgentsTab({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const { token } = useAuth();
+  const { toastError } = useToast();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    setLoading(true);
+    agentsApi
+      .getAll(token)
+      .then((data) => {
+        if (!cancelled) setAgents(data);
+      })
+      .catch((err) => {
+        if (!cancelled) toastError(err instanceof ApiError ? err.message : "Gagal memuat daftar asisten.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const goToAgents = () => {
+    onClose();
+    router.push("/agents");
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl animate-in fade-in duration-200">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-white/70">
+          Asisten AI dengan persona khusus yang bisa kamu panggil saat mengobrol.
+        </p>
+        <button
+          onClick={goToAgents}
+          className="shrink-0 flex items-center gap-2 border border-white/30 text-white px-4 py-2 rounded-none text-sm font-bold transition-colors hover:bg-white/10"
+        >
+          <Plus className="h-4 w-4" /> Kelola Asisten
+        </button>
+      </div>
+
+      {loading ? (
+        <PrefLoading />
+      ) : agents.length === 0 ? (
+        <div className="rounded-none border border-dashed border-white/30 bg-transparent p-8 text-center">
+          <p className="text-sm text-white/60 mb-4">Belum ada asisten yang dibuat.</p>
+          <button
+            onClick={goToAgents}
+            className="inline-flex items-center gap-2 border border-white/30 text-white px-4 py-2 rounded-none text-sm font-bold transition-colors hover:bg-white/10"
+          >
+            <Plus className="h-4 w-4" /> Buat Asisten Pertama
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-none border border-white/30 bg-transparent divide-y divide-white/20 shadow-none backdrop-blur-md">
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              onClick={goToAgents}
+              className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/5"
+            >
+              <div className="h-10 w-10 shrink-0 border border-white/30 flex items-center justify-center">
+                <Bot className="h-5 w-5 text-white/80" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-bold text-white block truncate">{agent.name}</span>
+                <span className="text-xs text-white/50 block truncate">
+                  {agent.role || "Tanpa peran khusus"}
+                </span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- MEMORI & INSTRUKSI KHUSUS ---
+function MemoryTab() {
+  const { prefs, loading, saving, dirty, setField, save } = usePreferences();
+
+  if (loading || !prefs) return <PrefLoading />;
+
+  const instructions = prefs.custom_instructions ?? "";
+
+  return (
+    <div className="space-y-6 max-w-3xl animate-in fade-in duration-200">
+      <section>
+        <h3 className="text-base font-bold text-white mb-1">Instruksi Khusus</h3>
+        <p className="text-sm text-white/50 mb-3">
+          Ditambahkan ke setiap percakapan baru. Cocok untuk menyebut jurusan, gaya bahasa, atau
+          format jawaban yang kamu inginkan.
+        </p>
+        <textarea
+          value={instructions}
+          onChange={(e) => setField("custom_instructions", e.target.value)}
+          rows={6}
+          maxLength={4000}
+          placeholder="Contoh: Saya mahasiswa Teknik Informatika. Jelaskan dengan bahasa sederhana dan sertakan contoh kode Python bila relevan."
+          className="w-full bg-transparent border border-white/30 rounded-none px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/60 transition-colors resize-y"
+        />
+        <div className="text-xs text-white/40 mt-1 text-right">{instructions.length}/4000 karakter</div>
+      </section>
+
+      <section>
+        <h3 className="text-base font-bold text-white mb-1">Nilai Bawaan Fitur Lain</h3>
+        <p className="text-sm text-white/50 mb-3">Dipakai sebagai isian awal saat kamu membuka fitur berikut.</p>
+        <div className="rounded-none border border-white/30 bg-transparent px-5 py-2 divide-y divide-white/20 shadow-none backdrop-blur-md">
+          <FieldRow label="Kedalaman Riset Mendalam" hint="Pilihan awal saat membuat riset baru.">
+            <div className="flex border border-white/30">
+              {(["ringkas", "standar", "mendalam"] as const).map((depth) => (
+                <button
+                  key={depth}
+                  onClick={() => setField("research_default_depth", depth)}
+                  className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                    prefs.research_default_depth === depth
+                      ? "bg-white text-[#0011ff]"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  {depth}
+                </button>
+              ))}
+            </div>
+          </FieldRow>
+          <FieldRow label="Jumlah soal latihan" hint="Jumlah pertanyaan awal saat membuat kuis. 1 - 30.">
+            <NumberInput
+              value={prefs.default_quiz_questions}
+              onChange={(v) => setField("default_quiz_questions", v)}
+              min={1}
+              max={30}
+              suffix="soal"
+            />
+          </FieldRow>
+        </div>
+      </section>
+
+      <SaveBar
+        saving={saving}
+        dirty={dirty}
+        onSave={() => save(["custom_instructions", "research_default_depth", "default_quiz_questions"])}
+      />
+    </div>
+  );
+}
+
+// Utility component for toggles — bisa dipakai terkendali (checked+onChange) atau mandiri.
+function ToggleSwitch({
+  defaultChecked = false,
+  checked,
+  onChange,
+}: {
+  defaultChecked?: boolean;
+  checked?: boolean;
+  onChange?: (value: boolean) => void;
+}) {
+  const [internal, setInternal] = useState(defaultChecked);
+  const isControlled = checked !== undefined;
+  const value = isControlled ? checked : internal;
+
+  return (
+    <button
+      onClick={() => {
+        const next = !value;
+        if (!isControlled) setInternal(next);
+        onChange?.(next);
+      }}
+      className={`relative h-6 w-11 rounded-none transition-colors focus:outline-none shadow-none border border-white/30 ${value ? 'bg-white' : 'bg-transparent'}`}
     >
-      <span className={`absolute top-1 h-4 w-4 rounded-none bg-transparent shadow-none transition-all ${checked ? 'left-[26px]' : 'left-1'}`} />
+      <span className={`absolute top-1 h-4 w-4 rounded-none transition-all ${value ? 'left-[26px] bg-[#0011ff]' : 'left-1 bg-white/50'}`} />
     </button>
   );
 }

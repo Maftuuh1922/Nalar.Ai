@@ -120,7 +120,7 @@ export default function ProgressPage() {
             </Link>
 
             {/* Notebooks */}
-            <div className="rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative">
+            <Link href="/catatan" className="block rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative">
               <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="flex items-center gap-4 mb-4">
                 <div className="h-10 w-10 rounded-none bg-transparent flex items-center justify-center">
@@ -137,7 +137,7 @@ export default function ProgressPage() {
               <p className="text-xs text-white/50">
                 Catatan ringkasan otomatis dari DeepTutor agentic loop.
               </p>
-            </div>
+            </Link>
 
             {/* Question Bank */}
             <Link href="/latihan-soal" className="block rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all cursor-pointer group relative">
@@ -180,7 +180,10 @@ export default function ProgressPage() {
               </p>
             </div>
 
-            <Link href="/settings" className="block rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all group relative cursor-pointer">
+            <button
+              onClick={() => window.dispatchEvent(new Event("open-settings"))}
+              className="block w-full text-left rounded-none border border-white/30 bg-transparent p-5 hover:border-white/30 hover:shadow-none transition-all group relative cursor-pointer"
+            >
               <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="flex items-center gap-4 mb-4">
                 <div className="h-10 w-10 rounded-none bg-transparent flex items-center justify-center">
@@ -194,7 +197,7 @@ export default function ProgressPage() {
               <p className="text-xs text-white/50">
                 Kelola API Key, Base URL, dan model AI aktif.
               </p>
-            </Link>
+            </button>
           </div>
         </div>
       </div>

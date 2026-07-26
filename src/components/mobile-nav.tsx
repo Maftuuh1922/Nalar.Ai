@@ -3,15 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, MessageSquare, Library, BrainCircuit, TrendingUp, Settings, LogOut, Globe, HelpCircle, ArrowUpCircle, Download, Info, ChevronsUpDown, Bot, Edit3 } from "lucide-react";
+import { Menu, X, MessageSquare, BrainCircuit, TrendingUp, Settings, LogOut, Globe, HelpCircle, ArrowUpCircle, Download, Info, ChevronsUpDown, Bot, Edit3, BookOpen } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 
 const MAIN_NAV_ITEMS = [
   { href: "/beranda", label: "Beranda", icon: MessageSquare },
-  { href: "/materi-saya", label: "Materi Saya", icon: Library },
   { href: "/latihan-soal", label: "Latihan Soal", icon: BrainCircuit },
   { href: "/agents", label: "Asisten AI", icon: Bot },
   { href: "/catatan", label: "Catatan", icon: Edit3 },
+  { href: "/book", label: "Riset Mendalam", icon: BookOpen },
   { href: "/progress", label: "Progress Belajar", icon: TrendingUp },
 ];
 
