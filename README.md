@@ -55,7 +55,7 @@ npm install -g nalar-ai-cli
 
 ### 2. Jalankan Nalar AI
 ```bash
-nalar-ai start
+nalar-ai
 ```
 Perintah ini akan secara otomatis:
 1. Membuat direktori `~/.nalar-ai` di lokal Anda.
