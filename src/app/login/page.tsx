@@ -16,7 +16,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("admin@nalar.ai");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,20 +50,7 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="email" className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/70">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@email.com"
-                className="rounded-none border-b-2 border-white/30 bg-transparent px-2 py-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-white focus:bg-white/5 font-mono"
-              />
-            </div>
+            {/* Removed Email Field for OmniRoute-like single password login */}
 
             <div className="flex flex-col gap-2 mt-2">
               <div className="flex items-center justify-between">
@@ -84,7 +71,7 @@ export default function LoginPage() {
                 className="rounded-none border-b-2 border-white/30 bg-transparent px-2 py-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-white focus:bg-white/5 font-mono"
               />
               <p className="text-[10px] font-mono text-white/50 mt-1">
-                Default Email: admin@nalar.ai | Default Password: CHANGEME
+                Default password: CHANGEME (unless changed in terminal)
               </p>
             </div>
 
