@@ -84,16 +84,16 @@ export default function LandingPage() {
                </div>
                
                <div>
-                  <div className="font-mono text-[10px] uppercase tracking-widest mb-4 opacity-70">AKSES CEPAT</div>
+                  <div className="font-mono text-[10px] uppercase tracking-widest mb-4 opacity-70">INSTAL LOKAL (CLI)</div>
                   <div className="bg-white text-[#111] p-1.5 flex items-center justify-between font-mono text-sm w-full font-bold">
-                     <span className="px-3">nalar.ai/upload</span>
+                     <span className="px-3">npm install -g nalar-ai</span>
                      <button className="bg-gray-200 hover:bg-gray-300 p-2 transition-colors text-[#0011ff]">
                         <Copy className="w-4 h-4" />
                      </button>
                   </div>
                   <div className="flex gap-4 mt-4 font-mono text-[10px] uppercase tracking-widest opacity-70">
-                     <Link href="#" className="hover:underline">Upload Dokumen</Link>
-                     <Link href="#" className="hover:underline">Ekstensi Browser</Link>
+                     <span>Satu Perintah.</span>
+                     <span>Jalankan Nalar AI Lokal.</span>
                   </div>
                </div>
             </motion.div>
