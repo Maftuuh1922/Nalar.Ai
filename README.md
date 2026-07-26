@@ -42,36 +42,42 @@ Nalar.ai Frontend dibangun menggunakan kumpulan pustaka modern untuk menjamin ke
 | **Komponen UI** | [HeroUI](https://heroui.com/) & `react-resizable-panels` |
 | **Ikonografi** | [Lucide React](https://lucide.dev/) |
 
-## 📦 Panduan Instalasi
+## 📦 Panduan Instalasi (Cara Tercepat)
 
-Menyiapkan Nalar.ai untuk berjalan di lokal sangat mudah. Ikuti langkah-langkah di bawah ini:
+Cara paling mudah dan direkomendasikan untuk menjalankan seluruh ekosistem Nalar.ai (Frontend & Backend) adalah dengan menggunakan **Nalar AI CLI**.
 
-### 1. Kloning Repositori
+Alat ini akan secara otomatis mengkloning repositori, mengatur *virtual environment* Python, menginstal dependensi, dan menjalankan server secara bersamaan dengan satu baris perintah.
+
+### 1. Instal Nalar AI CLI (Global)
+```bash
+npm install -g nalar-ai-cli
+```
+
+### 2. Jalankan Nalar AI
+```bash
+nalar-ai start
+```
+Perintah ini akan secara otomatis:
+1. Membuat direktori `~/.nalar-ai` di lokal Anda.
+2. Mengkloning repositori Frontend dan Backend Nalar.ai.
+3. Menyiapkan environment & menginstal semua dependensi secara otomatis.
+4. Menjalankan *development server* Backend (`localhost:8000`) dan Frontend (`localhost:3000`).
+5. Otomatis membuka aplikasi di browser Anda.
+
+<br/>
+
+### Alternatif: Instalasi Manual
+Jika Anda ingin mengembangkan atau mengkloning Frontend ini saja (tanpa otomatisasi CLI), Anda bisa melakukannya secara konvensional:
+
 ```bash
 git clone https://github.com/Maftuuh1922/Nalar.ai_fe.git
 cd Nalar.ai_fe
-```
-
-### 2. Instal Dependensi
-Sangat disarankan menggunakan `pnpm` untuk manajemen paket yang lebih cepat (meskipun `npm` dan `yarn` juga didukung).
-```bash
 pnpm install
-```
-
-### 3. Konfigurasi Environment
-Buat file bernama `.env.local` di root repositori dan tambahkan URL Backend API Nalar.ai Anda:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-### 4. Jalankan Development Server
-```bash
 pnpm dev
 ```
-Buka browser dan akses [http://localhost:3000](http://localhost:3000) untuk melihat platform Nalar.ai beraksi.
 
 ## 🔗 Ketergantungan Backend (Penting)
-Nalar.ai *Frontend* hanyalah separuh dari keajaiban. Agar seluruh fitur (Obrolan AI, Ekstraksi Dokumen, Kuis) berjalan sempurna, Anda **wajib** menjalankan repositori Backend API Nalar.ai secara berdampingan di `localhost:8000`.
+Jika Anda menggunakan instalasi manual, Nalar.ai *Frontend* hanyalah separuh dari keajaiban. Agar seluruh fitur (Obrolan AI, Ekstraksi Dokumen, Kuis) berjalan sempurna, Anda **wajib** menjalankan repositori Backend API Nalar.ai secara berdampingan di `localhost:8000`. Jika menggunakan `nalar-ai start`, langkah ini sudah tertangani otomatis.
 
 ---
 <div align="center">
