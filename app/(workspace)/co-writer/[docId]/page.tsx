@@ -11,7 +11,6 @@ import {
   type SetStateAction,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { marked } from 'marked'
 import {
   ArrowRight,
   Bold,
@@ -40,6 +39,7 @@ import {
   ListOrdered,
   ListTree,
   Loader2,
+  MessagesSquare,
   MoreHorizontal,
   Minus,
   NotebookPen,
@@ -47,12 +47,10 @@ import {
   PanelRightClose,
   Quote,
   Redo2,
-  RefreshCw,
   SearchCheck,
   Strikethrough,
   Table2,
   Undo2,
-  WandSparkles,
   X,
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
@@ -62,29 +60,30 @@ import {
   convertDocxToMarkdown,
   createCoWriterCheckpoint,
   deleteCoWriterFile,
-  exportDocxFromMarkdown,
   exportLatexFromMarkdown,
   getCoWriterFile,
   getCoWriterDocument,
-  getCoWriterMarkdown,
   getCoWriterOutline,
   getCoWriterSource,
-  getCoWriterSfdt,
   getWorkingDocx,
   listCoWriterFiles,
   renameCoWriterFile,
   saveCoWriterFile,
-  saveCoWriterSfdt,
+  saveWorkingDocx,
   splitCoWriterDocument,
   updateCoWriterDocument,
   type CoWriterFile,
   type CoWriterOutlineHeading,
 } from '@/lib/co-writer-api'
 import { notifyCoWriterChanged } from '@/lib/co-writer-events'
+import { getSession } from '@/lib/session-api'
 import { useAppShell } from '@/context/AppShellContext'
-import AgenticWriteModal from '@/components/co-writer/AgenticWriteModal'
+import AgenticRunPanel, { type FeToolResult } from '@/components/co-writer/AgenticRunPanel'
 import ReferenceSidebar from '@/components/co-writer/ReferenceSidebar'
 import CoWriterChatPanel from '@/components/co-writer/CoWriterChatPanel'
+import HistorySessionPicker, {
+  type SelectedHistorySession,
+} from '@/components/chat/HistorySessionPicker'
 import QuickCitePopup from '@/components/co-writer/QuickCitePopup'
 import SaveToNotebookModal, {
   type NotebookSavePayload,
@@ -128,27 +127,6 @@ const FOCUS_MODE_KEY = 'nalar-ai.co_writer.focus_mode'
 const FILE_TREE_OPEN_KEY = 'nalar-ai.co_writer.file_tree_open'
 const RIGHT_PANEL_OPEN_KEY = 'nalar-ai.co_writer.right_panel_open'
 
-function markdownToSfdt(markdown: string): string {
-  const html = marked.parse(markdown, { gfm: true, breaks: false }) as string
-  // Markup layout dari ekstraktor PDF harus menjadi layout nyata, bukan teks.
-  return html
-    .replace(/<center>/gi, '<div style="text-align:center">')
-    .replace(/<\/center>/gi, '</div>')
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\son\w+\s*=\s*(["']).*?\1/gi, '')
-}
-
-function sfdtHasVisibleContent(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(sfdtHasVisibleContent)
-  if (!value || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
-  if (typeof record.text === 'string' && record.text.trim()) return true
-  if (typeof record.imageString === 'string' && record.imageString.trim()) return true
-  return Object.entries(record).some(
-    ([key, child]) =>
-      key !== 'text' && key !== 'imageString' && sfdtHasVisibleContent(child)
-  )
-}
 const CHAT_PANEL_OPEN_KEY = 'nalar-ai.co_writer.chat_panel_open'
 const LOCAL_DRAFT_PREFIX = 'nalar-ai.co_writer.draft.'
 const AUTOSAVE_DEBOUNCE_MS = 1500
@@ -498,7 +476,6 @@ export default function CoWriterPage() {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isUnmountedRef = useRef(false)
   const [docTitle, setDocTitle] = useState<string>('')
-  const [sourceFormat, setSourceFormat] = useState<string | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState<string>('')
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -531,11 +508,15 @@ export default function CoWriterPage() {
   // UI utama selalu editor Word. LaTeX hanya format internal untuk ekspor.
   const [editMode, setEditMode] = useState<'sync' | 'source'>('sync')
   const syncMode = editMode === 'sync'
-  // Mode Sync (Syncfusion Document Editor): dokumen kerja = SFDT (JSON).
-  const [sfdt, setSfdt] = useState('')
-  const sfdtRef = useRef('')
+  // Mode Word (SuperDoc): dokumen kerja = DOCX kerja di server. Editor memuat
+  // berkas itu (`initialSyncFile`) dan mengekspornya kembali saat autosave —
+  // tidak ada representasi string perantara.
   const sfdtDirtyRef = useRef(false)
   const sfdtSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Cegah dua autosave menimpa satu sama lain: serialisasi OOXML dokumen besar
+  // butuh waktu, jadi bila satu simpan masih jalan, tandai ulang kotor dan
+  // biarkan yang berjalan sekarang selesai lebih dulu.
+  const savingRef = useRef(false)
   const [sfdtLoadKey, setSfdtLoadKey] = useState(0)
   const [initialSyncFile, setInitialSyncFile] = useState<File | null>(null)
   const syncEditorRef = useRef<SuperDocEditorHandle | null>(null)
@@ -555,7 +536,11 @@ export default function CoWriterPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isAgenticModalOpen, setIsAgenticModalOpen] = useState(false)
+  const [showChatImportPicker, setShowChatImportPicker] = useState(false)
+  const [importedConversation, setImportedConversation] = useState<{
+    title: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+  } | null>(null)
   // ── PRD v2.3: layout 3 kolom ──
   // Layout panel dipersist antar sesi (kecuali lebar file tree yang tetap
   // default). Mode fokus = tulis tanpa gangguan: panel samping disembunyikan.
@@ -777,9 +762,23 @@ export default function CoWriterPage() {
         setMarkdown(content)
         setProjectFiles(files)
         setDocTitle(document.title || '')
-        setSourceFormat(document.source_format ?? null)
         lastSavedContentRef.current = document.content ?? ''
         setLastSavedAt(document.updated_at ? document.updated_at * 1000 : Date.now())
+        // Markdown-first: dokumen markdown terbuka langsung di editor markdown
+        // (mode 'source'); editor Word tetap tersedia lewat toggle dan dihormati
+        // bila pengguna sudah memilihnya (tersimpan di localStorage). Tanpa
+        // pilihan tersimpan, draf lama non-markdown tetap default ke Word.
+        let modePref: string | null = null
+        try {
+          modePref = window.localStorage.getItem('nalar-ai.co_writer.edit_mode')
+        } catch {
+          /* localStorage diblokir — abaikan */
+        }
+        if (modePref === 'sync' || modePref === 'source') {
+          setEditMode(modePref)
+        } else if (document.content_format === 'markdown') {
+          setEditMode('source')
+        }
         setHasLoadedDraft(true)
       } catch (err) {
         if (cancelled) return
@@ -984,100 +983,80 @@ export default function CoWriterPage() {
     }
   }, [docId, draftStorageKey, hasLoadedDraft])
 
-  // ── Mode Sync (Syncfusion): dokumen kerja = SFDT (JSON) ──
-  const saveSfdtNow = useCallback(async () => {
+  // ── Mode Word (SuperDoc): dokumen kerja = DOCX kerja di server ──
+  // Sumber kebenaran tunggal: editor mengekspor DOCX, DOCX itu yang disimpan,
+  // dan DOCX itu pula yang diunduh/dicetak saat ekspor. Tidak ada buffer
+  // markdown/LaTeX perantara — dulu yang tersimpan malah cap waktu, bukan
+  // dokumen, sehingga tiap suntingan hilang saat refresh.
+  const simpanDocxKerja = useCallback(async () => {
     if (!docId || !sfdtDirtyRef.current) return
-    const sfdtNow = sfdtRef.current
+    // Serialisasi OOXML dokumen besar butuh waktu; jangan menumpuk simpan.
+    if (savingRef.current) return
+    const editor = syncEditorRef.current
+    if (!editor) return
+    savingRef.current = true
     sfdtDirtyRef.current = false
     setIsSavingDoc(true)
     try {
-      await saveCoWriterSfdt(docId, { sfdt: sfdtNow })
+      const blob = await editor.exportDocx()
+      // exportDocx melempar bila instance belum siap; blob kosong tak akan
+      // sampai ke sini. Backend juga menolak non-DOCX (422) sebagai jaring.
+      await saveWorkingDocx(docId, blob)
       notifyCoWriterChanged()
     } catch (err) {
+      // Tandai ulang kotor supaya perubahan yang gagal tersimpan dicoba lagi.
       sfdtDirtyRef.current = true
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
       throw err
     } finally {
+      savingRef.current = false
       if (!isUnmountedRef.current) setIsSavingDoc(false)
     }
   }, [docId])
 
   const scheduleSfdtSave = useCallback(() => {
     if (sfdtSaveTimerRef.current) clearTimeout(sfdtSaveTimerRef.current)
+    // Debounce 3 dtk: ekspor DOCX 64 halaman menghasilkan ~5 MB per simpan,
+    // jadi jangan sesering autosave teks biasa.
     sfdtSaveTimerRef.current = setTimeout(() => {
       sfdtSaveTimerRef.current = null
-      void saveSfdtNow().catch(() => undefined)
-    }, 1200)
-  }, [saveSfdtNow])
+      void simpanDocxKerja().catch(() => undefined)
+    }, 3000)
+  }, [simpanDocxKerja])
 
   const loadSfdt = useCallback(async () => {
     if (!docId) return
     try {
-      const data = await getCoWriterSfdt(docId)
-      // SFDT tanpa section/block (mis. {"sections":[]}) tidak valid utk ej2 —
-      // anggap kosong agar editor memakai EMPTY_SFDT (satu paragraf kosong).
-      let next = ''
-      try {
-        if (data.sfdt.trimStart().startsWith('<')) {
-          next = data.sfdt
-        } else {
-          const parsed = JSON.parse(data.sfdt)
-          if (
-            Array.isArray(parsed?.sections) &&
-            parsed.sections.length > 0 &&
-            sfdtHasVisibleContent(parsed.sections)
-          ) {
-            next = data.sfdt
-          }
-        }
-      } catch {
-        next = ''
-      }
-      let importedFile: File | null = null
-      // Dokumen hasil impor hanya memiliki LaTeX/AST, belum memiliki SFDT.
-      // DOCX kerja NATIVE (hasil pipeline pdf2docx/postprocess) dibuka langsung
-      // agar style, margin, tabel, heading, dan gambar tetap terjaga — TANPA
-      // konversi markdown perantara yang membuat sintaks Markdown/Pandoc bocor.
-      if (!next) {
-        try {
-          const blob = await getWorkingDocx(docId)
-          if (blob && blob.size > 0) {
-            importedFile = new File([blob], 'dokumen.docx', {
+      // DOCX kerja NATIVE (hasil pipeline pdf2docx/postprocess, atau salinan
+      // DOCX asli, atau hasil template markdown untuk draf dari nol) dibuka
+      // langsung agar style, margin, tabel, heading, dan gambar tetap terjaga.
+      // Backend selalu menyiapkannya di `_prepare_onlyoffice_docx`, jadi tak
+      // ada lagi jalur markdown perantara yang membuat sintaks Pandoc bocor.
+      const blob = await getWorkingDocx(docId)
+      const importedFile =
+        blob && blob.size > 0
+          ? new File([blob], 'dokumen.docx', {
               type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             })
-          }
-        } catch {
-          // Fallback: DOCX kerja belum ada — buat dari markdown via export-docx.
-          const dataMd = await getCoWriterMarkdown(docId)
-          if (dataMd.markdown.trim()) {
-            next = markdownToSfdt(dataMd.markdown)
-            const resp = await apiFetch(
-              apiUrl(`/api/v1/co_writer/documents/${encodeURIComponent(docId)}/export-docx`),
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ markdown: dataMd.markdown }),
-              },
-            )
-            if (resp.ok) {
-              const blob = await resp.blob()
-              importedFile = new File([blob], `${dataMd.title || 'dokumen'}.docx`, {
-                type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              })
-            }
-          }
-        }
-      }
-      sfdtRef.current = next
+          : null
       sfdtDirtyRef.current = false
       setInitialSyncFile(importedFile)
-      setSfdt(next)
       setSfdtLoadKey(k => k + 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [docId, sourceFormat])
+  }, [docId])
+
+  // Panel kanan hanya dipakai mode Sumber (pratinjau hasil typeset). Mode Word
+  // adalah satu panel penuh — editor SuperDoc sudah menampilkan hasil apa adanya.
+  const panelKananTampil = syncMode ? false : showPreview
+  const bukaPanelKanan = useCallback(() => {
+    setPreviewCollapsed(false)
+  }, [])
+  const tutupPanelKanan = useCallback(() => {
+    setPreviewCollapsed(true)
+  }, [])
 
   // Muat SFDT saat masuk/ganti berkas dalam mode Sync.
   useEffect(() => {
@@ -1090,19 +1069,19 @@ export default function CoWriterPage() {
   // Wajib dipakai sebelum ganti berkas/ekspor, kalau tidak edit yang belum
   // tersimpan tertinggal atau tersimpan ke berkas salah.
   const flushCurrentBuffer = useCallback(async () => {
-    if (syncMode) await saveSfdtNow()
+    if (syncMode) await simpanDocxKerja()
     else await saveActiveBufferNow()
-  }, [saveActiveBufferNow, saveSfdtNow, syncMode])
+  }, [saveActiveBufferNow, simpanDocxKerja, syncMode])
 
-  // Jaring pengaman saat halaman berpindah (navigasi client-side): SFDT yang
-  // belum sempat disimpan (debounce 1,2 dtk) dikirim terakhir kali.
+  // Jaring pengaman saat halaman berpindah (navigasi client-side): DOCX kerja
+  // yang belum sempat disimpan (debounce 3 dtk) dikirim terakhir kali.
   useEffect(() => {
     return () => {
       if (sfdtDirtyRef.current) {
-        void saveSfdtNow().catch(() => undefined)
+        void simpanDocxKerja().catch(() => undefined)
       }
     }
-  }, [saveSfdtNow])
+  }, [simpanDocxKerja])
 
   const reloadLatexFromServer = useCallback(async () => {
     const targetFile = activeFileRef.current
@@ -1118,14 +1097,6 @@ export default function CoWriterPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [docId])
-
-  // ── P1: pipeline SFDT → DOCX (Syncfusion) → Markdown/LaTeX (Pandoc) ──
-  // Kebenaran kerja mode Sync = SFDT; ekspor & mode Sumber diregenerasi
-  // dari SFDT lewat pipeline ini, bukan dari kolom LaTeX lama.
-  const syncToMarkdown = useCallback(async (): Promise<string> => {
-    const data = await getCoWriterMarkdown(docId)
-    return data.markdown
   }, [docId])
 
   const downloadBlob = useCallback((blob: Blob, extension: string) => {
@@ -1167,15 +1138,17 @@ export default function CoWriterPage() {
         .catch(() => undefined)
         .then(async () => {
           try {
-            // P1: mode Sumber = LaTeX yang diregenerasi dari SFDT
-            // (SFDT → DOCX → Markdown → Pandoc).
+            // Markdown-first: mode Sumber kini = MARKDOWN yang diregenerasi dari
+            // DOCX kerja (SFDT → DOCX → Markdown). Dulu ini menghasilkan LaTeX,
+            // sehingga toggle Word→Sumber lalu balik mengotori buffer markdown
+            // bersih dengan LaTeX — persis korupsi yang dihindari pivot ini.
             if (!docx) throw new Error('Editor Sync belum siap.')
-            const result = await convertDocxToMarkdown(docId, docx, { to: 'latex' })
-            if (!('latex' in result)) throw new Error('Respons konversi tidak sah.')
-            const latex = result.latex
-            markdownRef.current = latex
-            setMarkdown(latex)
-            lastSavedContentRef.current = latex
+            const result = await convertDocxToMarkdown(docId, docx, { to: 'markdown' })
+            if (!('markdown' in result)) throw new Error('Respons konversi tidak sah.')
+            const md = result.markdown
+            markdownRef.current = md
+            setMarkdown(md)
+            lastSavedContentRef.current = md
             setLastSavedAt(Date.now())
           } catch {
             await reloadLatexFromServer()
@@ -1217,6 +1190,153 @@ export default function CoWriterPage() {
       })
     },
     [editMode, markdown, pushUndo]
+  )
+
+  // Jembatan eksekusi tool tulis agentic (Fase A / L2). Backend memancarkan
+  // tool_call {fe:true}; di sini kita jalankan ke editor SuperDoc (L0) dan
+  // kembalikan hasil NYATA supaya panel bisa menyusun ringkasan yang jujur.
+  //
+  // Di mode Sumber (bukan Word), editor SuperDoc tak aktif → jatuh ke buffer
+  // markdown sebagai penampung, tetap melaporkan sukses/gagal apa adanya.
+  const executeAgenticFeTool = useCallback(
+    async (name: string, args: Record<string, unknown>): Promise<FeToolResult> => {
+      const handle = syncEditorRef.current
+      // Mode Sumber: SuperDoc tak dipasang; sisipkan ke buffer markdown.
+      if (editMode !== 'sync' || !handle) {
+        if (name === 'doc_insert') {
+          const md = String(args.markdown ?? '')
+          pushUndo(markdown)
+          setMarkdown(prev => (prev ? `${prev}\n\n${md}` : md))
+          return { ok: true, summary: t('Ditambahkan ke draf (mode Sumber).') }
+        }
+        if (name === 'doc_replace') {
+          const find = String(args.find ?? '')
+          const replace = String(args.replace ?? '')
+          const all = Boolean(args.all)
+          if (!find || !markdown.includes(find)) {
+            return { ok: false, error: t('Teks tidak ditemukan di draf.') }
+          }
+          pushUndo(markdown)
+          setMarkdown(prev =>
+            all ? prev.split(find).join(replace) : prev.replace(find, replace)
+          )
+          return { ok: true, summary: t('Teks diganti (mode Sumber).') }
+        }
+        return { ok: false, error: t('Sitasi hidup hanya tersedia di mode Word.') }
+      }
+
+      try {
+        if (name === 'doc_insert') {
+          const md = String(args.markdown ?? '')
+          const anchor = args.anchor_text ? String(args.anchor_text) : undefined
+          const placement = args.placement === 'before' ? 'before' : 'after'
+          const r = await handle.insertMarkdown(md, anchor ? { anchorText: anchor, placement } : undefined)
+          return { ok: r.ok, error: r.error, summary: r.ok ? t('Teks disisipkan.') : undefined }
+        }
+        if (name === 'doc_replace') {
+          const find = String(args.find ?? '')
+          const replace = String(args.replace ?? '')
+          const all = Boolean(args.all)
+          const r = await handle.replaceText(find, replace, { all })
+          return {
+            ok: r.ok,
+            error: r.error,
+            summary: r.ok ? t('{{n}} kemunculan diganti.', { n: r.replaced }) : undefined,
+          }
+        }
+        if (name === 'cite_insert') {
+          const anchor = String(args.anchor_text ?? '')
+          const title = String(args.title ?? '')
+          const authorsRaw = Array.isArray(args.authors) ? (args.authors as unknown[]) : []
+          if (!anchor || !title || authorsRaw.length === 0) {
+            return { ok: false, error: t('Sitasi ditolak: metadata sumber tak lengkap.') }
+          }
+          // "Depan Belakang" → {first,last} untuk skema OOXML.
+          const authors = authorsRaw.map(a => {
+            const parts = String(a).trim().split(/\s+/)
+            const last = parts.length > 1 ? parts.pop()! : parts[0]
+            return { first: parts.join(' ') || undefined, last }
+          })
+          const src = await handle.insertCitationSource(
+            (args.source_type as never) || 'journalArticle',
+            {
+              title,
+              authors,
+              year: args.year ? String(args.year) : undefined,
+              doi: args.doi ? String(args.doi) : undefined,
+              journalName: args.journal ? String(args.journal) : undefined,
+            }
+          )
+          if (!src.ok || !src.sourceId) {
+            return { ok: false, error: src.error || t('Gagal membuat sumber sitasi.') }
+          }
+          const at = await handle.insertCitationAtAnchor(anchor, [src.sourceId])
+          return { ok: at.ok, error: at.error, summary: at.ok ? t('Sitasi disisipkan.') : undefined }
+        }
+        return { ok: false, error: t('Tool tak dikenal: {{name}}', { name }) }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+    [editMode, markdown, pushUndo, t]
+  )
+
+  // Potret dokumen untuk perencanaan agentic. Di mode Word pakai getOutline
+  // (cepat: peta heading tanpa serialisasi penuh yang memblok worker); di mode
+  // Sumber pakai buffer markdown apa adanya. Bila kosong, backend jatuh ke
+  // sumber proyek di server.
+  const getAgenticDocContext = useCallback(async (): Promise<string> => {
+    if (editMode === 'sync' && syncEditorRef.current) {
+      try {
+        const outline = await syncEditorRef.current.getOutline()
+        if (outline.length > 0) {
+          return outline.map(h => `${'#'.repeat(Math.min(h.level, 6))} ${h.text}`).join('\n')
+        }
+      } catch {
+        /* jatuh ke server */
+      }
+      return ''
+    }
+    return markdown
+  }, [editMode, markdown])
+
+  // Impor percakapan dari chat utama ke Asisten Agentic: ambil pesan tiap sesi
+  // terpilih, gabung, lalu suntikkan sebagai riwayat konteks di panel chat.
+  const handleApplyChatImport = useCallback(
+    async (sessions: SelectedHistorySession[]) => {
+      setShowChatImportPicker(false)
+      if (!sessions.length) return
+      try {
+        const details = await Promise.all(
+          sessions.map(session => getSession(session.sessionId).catch(() => null))
+        )
+        const messages: { role: 'user' | 'assistant'; content: string }[] = []
+        details.forEach((detail, index) => {
+          if (!detail) return
+          if (sessions.length > 1) {
+            messages.push({ role: 'assistant', content: `— ${sessions[index].title} —` })
+          }
+          for (const message of detail.messages) {
+            if ((message.role === 'user' || message.role === 'assistant') && message.content?.trim()) {
+              messages.push({ role: message.role, content: message.content })
+            }
+          }
+        })
+        if (!messages.length) {
+          setStatus(t('Percakapan yang dipilih tidak berisi pesan.'))
+          return
+        }
+        const title =
+          sessions.length === 1 ? sessions[0].title : `${sessions.length} ${t('percakapan')}`
+        // Ambil ~24 pesan terakhir agar konteks relevan tanpa membanjiri panel.
+        setImportedConversation({ title, messages: messages.slice(-24) })
+        setChatPanelOpen(true)
+        setStatus(t('Percakapan diimpor ke Asisten Agentic.'))
+      } catch {
+        setStatus(t('Gagal mengimpor percakapan dari chat utama.'))
+      }
+    },
+    [setChatPanelOpen, t]
   )
 
   const openProjectFile = useCallback(
@@ -1665,16 +1785,18 @@ export default function CoWriterPage() {
   }
 
   const handleExportDocx = async () => {
-    if (!markdown.trim()) {
+    // Gerbang LaTeX hanya untuk mode Sumber — di mode Word `markdown` tidak
+    // dipakai (dokumen ada di DOCX kerja), jadi jangan menghalangi ekspor.
+    if (!syncMode && !markdown.trim()) {
       setError(t('Add some content before exporting.'))
       return
     }
     try {
       await flushCurrentBuffer()
       if (editMode === 'sync') {
-        // P1: kebenaran kerja = SFDT → DOCX (Syncfusion) → Markdown (Pandoc).
-        const md = await syncToMarkdown()
-        const blob = await exportDocxFromMarkdown(docId, md)
+        // Persis seperti di layar: unduh DOCX kerja apa adanya (yang barusan
+        // disimpan oleh flushCurrentBuffer), bukan dibangun ulang dari markdown.
+        const blob = await getWorkingDocx(docId)
         downloadBlob(blob, '.docx')
       } else {
         const res = await apiFetch(
@@ -1695,7 +1817,7 @@ export default function CoWriterPage() {
   }
 
   const handleExportPdf = async () => {
-    if (!markdown.trim()) {
+    if (!syncMode && !markdown.trim()) {
       setError(t('Add some content before exporting.'))
       return
     }
@@ -1704,9 +1826,10 @@ export default function CoWriterPage() {
       let blob: Blob
       let fallbackNotice: string | null = null
       if (editMode === 'sync') {
-        // P1: kebenaran kerja = SFDT → DOCX → Markdown → Pandoc → tectonic.
+        // Persis seperti di layar: cetak DOCX kerja lewat LibreOffice
+        // (POST /export-pdf) — bukan jalur LaTeX/tectonic bertemplat kampus.
         const res = await apiFetch(
-          apiUrl(`/api/v1/co_writer/documents/${encodeURIComponent(docId)}/onlyoffice-export-pdf`),
+          apiUrl(`/api/v1/co_writer/documents/${encodeURIComponent(docId)}/export-pdf`),
           { method: 'POST', cache: 'no-store' }
         )
         if (!res.ok) {
@@ -1715,15 +1838,19 @@ export default function CoWriterPage() {
         }
         blob = await res.blob()
       } else {
+        // Markdown-first: PDF mode Sumber dirender lewat jalur typeset
+        // (Chromium) — HTML yang SAMA dengan panel pratinjau, jadi hasil unduhan
+        // persis yang di layar. Bukan `export-latex` (tectonic) yang dulu
+        // membuat "yang diinput beda dengan yang keluar".
         const res = await apiFetch(
-          apiUrl(`/api/v1/co_writer/documents/${encodeURIComponent(docId)}/export-latex?format=pdf`),
+          apiUrl(`/api/v1/co_writer/documents/${encodeURIComponent(docId)}/export?format=pdf`),
           { cache: 'no-store' }
         )
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { detail?: string } | null
           throw new Error(body?.detail || `HTTP ${res.status}`)
         }
-        // PRD v2.8 §4.3: bila jalur LaTeX gagal, backend mengirim DOCX/PDF
+        // PRD v2.8 §4.3: bila jalur render gagal, backend bisa mengirim DOCX/PDF
         // cadangan + header notifikasi — sesuaikan nama file dan pesannya.
         fallbackNotice = res.headers.get('X-Fallback-Notice')
         blob = await res.blob()
@@ -2424,21 +2551,21 @@ export default function CoWriterPage() {
               {docTitle || t('Untitled draft')}
             </span>
           )}
-          <span className="hidden text-xs sm:inline">
+          <span className="hidden shrink-0 text-xs sm:inline">
             {wordCount} {t('words')} &middot; {charCount} {t('chars')}
           </span>
           {isSavingDoc ? (
-            <span className="hidden items-center gap-1 text-[10px] text-[var(--muted-foreground)]/70 sm:inline-flex">
+            <span className="hidden shrink-0 items-center gap-1 text-[10px] text-[var(--muted-foreground)]/70 sm:inline-flex">
               <Loader2 size={10} className="animate-spin" />
               {t('Saving…')}
             </span>
           ) : lastSavedAt ? (
-            <span className="hidden text-[10px] text-[var(--muted-foreground)]/60 sm:inline">
+            <span className="hidden shrink-0 text-[10px] text-[var(--muted-foreground)]/60 sm:inline">
               {t('Saved')}
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <VersionHistory
             docId={docId}
             onRestored={async () => {
@@ -2501,6 +2628,17 @@ export default function CoWriterPage() {
             ]}
           />
           <div className="mx-0.5 h-5 w-px bg-[var(--border)]" />
+          {editMode === 'sync' && (
+            <button
+              type="button"
+              onClick={toggleEditMode}
+              title={t('Beralih ke editor Markdown')}
+              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[10.5px] font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+            >
+              <Code2 size={12} />
+              <span className="hidden md:inline">{t('Markdown')}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setFocusMode(v => !v)}
@@ -2514,24 +2652,6 @@ export default function CoWriterPage() {
           >
             <Focus size={12} />
             <span className="hidden md:inline">{focusMode ? t('Fokus') : t('Mode fokus')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsEditModalOpen(true)}
-            title={t('Perbaiki seluruh draf dengan instruksi AI')}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/[0.08] px-3 py-1.5 text-[12px] font-medium text-[var(--primary)] transition-[background-color,transform] hover:bg-[var(--primary)]/[0.14] active:scale-[0.97]"
-          >
-            <WandSparkles size={13} />
-            <span className="hidden xl:inline">{t('Edit Draf AI')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsAgenticModalOpen(true)}
-            title={t('Tulis bagian laporan dengan asisten agentic')}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-[12px] font-medium text-[var(--primary-foreground)] transition-[opacity,transform] hover:opacity-90 active:scale-[0.97]"
-          >
-            <Bot size={13} />
-            <span className="hidden sm:inline">{t('Tulis dengan AI')}</span>
           </button>
         </div>
       </header>
@@ -2892,14 +3012,15 @@ export default function CoWriterPage() {
             <div
               className="flex min-h-0 flex-col"
               style={{
-                // Mode Sync: satu panel penuh ala Word — tidak ada split preview.
-                width: showPreview && editMode === 'source' ? `${editorRatio * 100}%` : '100%',
+                // Mode Word: satu panel penuh. Mode Sumber: berbagi lebar dengan
+                // panel pratinjau saat panel itu terbuka.
+                width: panelKananTampil ? `${editorRatio * 100}%` : '100%',
               }}
             >
               {editMode === 'source' && (
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1">
                 <span className="min-w-0 truncate text-xs font-medium text-[var(--muted-foreground)]">
-                  {t('Editor')} · {activeFile ?? 'main.tex'}
+                  {t('Editor')} · {activeFile ?? (docTitle || t('Markdown'))}
                   {isLoadingFile || isSavingDoc ? (
                     <Loader2 size={11} className="ml-1 inline animate-spin" />
                   ) : null}
@@ -2929,8 +3050,7 @@ export default function CoWriterPage() {
                   key={sfdtLoadKey}
                   ref={syncEditorRef}
                   initialFile={initialSyncFile}
-                  onChange={nextSfdt => {
-                    sfdtRef.current = nextSfdt
+                  onChange={() => {
                     sfdtDirtyRef.current = true
                     scheduleSfdtSave()
                   }}
@@ -2944,14 +3064,14 @@ export default function CoWriterPage() {
                   onKeyDown={handleEditorKeyDown}
                   onScroll={handleEditorScrollSync}
                   dark={editorDark}
-                  placeholder={t('Mulai menulis kode LaTeX...')}
+                  placeholder={t('Mulai menulis dengan Markdown...')}
                 />
               )}
             </div>
           )}
 
           {/* Draggable splitter (only when both panes are visible) */}
-          {showEditor && showPreview && editMode === 'source' && (
+          {showEditor && panelKananTampil && (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -2988,9 +3108,10 @@ export default function CoWriterPage() {
             </button>
           )}
 
-          {previewCollapsed && editMode === 'source' && (
+          {/* Buka panel kanan: pratinjau hasil typeset (mode Sumber) */}
+          {!panelKananTampil && editMode === 'source' && (
             <button
-              onClick={() => setPreviewCollapsed(false)}
+              onClick={bukaPanelKanan}
               title={t('Expand preview')}
               className="flex w-7 shrink-0 items-center justify-center border-l border-[var(--border)] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
             >
@@ -2998,25 +3119,27 @@ export default function CoWriterPage() {
             </button>
           )}
 
-          {/* Preview panel — PDF hasil kompilasi LaTeX (mode Sumber) */}
-          {showPreview && editMode === 'source' && (
+          {/* Panel kanan — pratinjau hasil kompilasi LaTeX (mode Sumber) */}
+          {panelKananTampil && (
             <div
               className="flex min-h-0 flex-col"
               style={{
                 width: showEditor ? `${(1 - editorRatio) * 100}%` : '100%',
               }}
             >
-              <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-1">
-                <span className="text-xs font-medium text-[var(--muted-foreground)]">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1">
+                <span className="min-w-0 truncate text-xs font-medium text-[var(--muted-foreground)]">
                   {t('Pratinjau')}
                 </span>
-                <button
-                  title={t('Collapse preview')}
-                  onClick={() => setPreviewCollapsed(true)}
-                  className="rounded p-0.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-                >
-                  <ChevronRight size={14} />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    title={t('Collapse preview')}
+                    onClick={tutupPanelKanan}
+                    className="rounded p-0.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
               </div>
               <TypesetHtmlPreview
                 docId={docId}
@@ -3024,7 +3147,6 @@ export default function CoWriterPage() {
                 content={markdown}
                 jumpToText={previewJumpText}
                 onJumpToTextHandled={() => setPreviewJumpText(null)}
-                sourceFormat={sourceFormat}
                 onCapture={image => {
                   setCapturedChatImage(image)
                   setChatPanelOpen(true)
@@ -3065,7 +3187,7 @@ export default function CoWriterPage() {
                       : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                   }`}
                 >
-                  {t('Agentic Write')}
+                  {t('Kerjakan otomatis')}
                 </button>
               </div>
               <button
@@ -3084,24 +3206,12 @@ export default function CoWriterPage() {
                 onInsert={insertIntoEditor}
               />
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex-1 overflow-y-auto p-3">
-                  <AgenticWriteModal
-                    open
-                    onClose={() => setRightPanelOpen(false)}
-                    onApply={draft => {
-                      if (syncMode) {
-                        syncEditorRef.current?.appendText(draft ? `\n\n${draft}` : draft)
-                      } else {
-                        const snapshot = markdown
-                        pushUndo(snapshot)
-                        setMarkdown(snapshot ? `${snapshot}\n\n${draft}` : draft)
-                      }
-                      setStatus(t('Draf agentic diterapkan ke dokumen.'))
-                    }}
-                  />
-                </div>
-              </div>
+              <AgenticRunPanel
+                docId={docId}
+                executeFeTool={executeAgenticFeTool}
+                getDocContext={getAgenticDocContext}
+                selectionText={selectedRange ? markdown.slice(selectedRange.start, selectedRange.end) : null}
+              />
             )}
           </div>
         )}
@@ -3134,6 +3244,14 @@ export default function CoWriterPage() {
           </span>
           <button
             type="button"
+            onClick={() => setShowChatImportPicker(true)}
+            title={t('Impor percakapan dari chat utama')}
+            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+          >
+            <MessagesSquare size={14} />
+          </button>
+          <button
+            type="button"
             onClick={() => setChatPanelOpen(false)}
             title={t('Tutup asisten')}
             className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
@@ -3151,6 +3269,10 @@ export default function CoWriterPage() {
             setRightPanelTab('agentic')
             setRightPanelOpen(true)
           }}
+          onOpenFullEdit={() => setIsEditModalOpen(true)}
+          onImportChat={() => setShowChatImportPicker(true)}
+          importedConversation={importedConversation}
+          onImportedConversationConsumed={() => setImportedConversation(null)}
           onExportPdf={handleExportPdf}
           onExportDocx={handleExportDocx}
           externalImage={capturedChatImage}
@@ -3534,22 +3656,11 @@ export default function CoWriterPage() {
         </div>
       )}
 
-      {isAgenticModalOpen && (
-        <AgenticWriteModal
-          open={isAgenticModalOpen}
-          onClose={() => setIsAgenticModalOpen(false)}
-          onApply={draft => {
-            if (syncMode) {
-              syncEditorRef.current?.appendText(draft ? `\n\n${draft}` : draft)
-            } else {
-              const snapshot = markdown
-              pushUndo(snapshot)
-              setMarkdown(snapshot ? `${snapshot}\n\n${draft}` : draft)
-            }
-            setStatus(t('Draf agentic diterapkan ke dokumen.'))
-          }}
-        />
-      )}
+      <HistorySessionPicker
+        open={showChatImportPicker}
+        onClose={() => setShowChatImportPicker(false)}
+        onApply={handleApplyChatImport}
+      />
 
       {/* ── PRD 9.2: Diff inline AI edit — Accept/Reject per chunk ── */}
       {pendingDiff && (

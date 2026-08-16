@@ -14,15 +14,11 @@
  *    panel setiap kali itu terjadi membuat layar berkedip.
  * 2. **Permintaan lama dibatalkan lewat AbortController.** Balasan yang datang
  *    tidak berurutan bisa menimpa hasil yang lebih baru.
- * 3. **PDF asli tetap tersedia** untuk dokumen yang diimpor dari PDF (tab
- *    "Asli"), ditampilkan lewat penampil PDF bawaan browser.
  */
 
 import {
   AlertTriangle,
   Camera,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Heading1,
   Loader2,
@@ -49,7 +45,6 @@ interface Props {
   docId: string
   documentTitle?: string
   content: string
-  sourceFormat?: string | null
   /** Judul outline yang perlu ditemukan pada pratinjau aktif. */
   jumpToText?: string | null
   onJumpToTextHandled?: () => void
@@ -62,7 +57,6 @@ export default function TypesetHtmlPreview({
   docId,
   documentTitle = 'dokumen',
   content,
-  sourceFormat = null,
   jumpToText = null,
   onJumpToTextHandled,
   compileNonce = 0,
@@ -70,14 +64,10 @@ export default function TypesetHtmlPreview({
 }: Props) {
   const { t } = useTranslation()
   const [html, setHtml] = useState<string | null>(null)
-  const [previewMode, setPreviewMode] = useState<'original' | 'edited'>(
-    sourceFormat === 'pdf' ? 'original' : 'edited'
-  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [zoom, setZoom] = useState(1)
   const [locatingHeading, setLocatingHeading] = useState(false)
-  const [sourceError, setSourceError] = useState<string | null>(null)
   const [activeHeading, setActiveHeading] = useState('')
 
   const abortRef = useRef<AbortController | null>(null)
@@ -85,17 +75,12 @@ export default function TypesetHtmlPreview({
   const frameRef = useRef<HTMLIFrameElement>(null)
   const previewBoxRef = useRef<HTMLDivElement>(null)
   const headingObserverRef = useRef<IntersectionObserver | null>(null)
-  const hasOriginalPdf = sourceFormat === 'pdf'
 
   // Perkiraan lebar halaman A4 pada 96 DPI (pixels).
   const A4_WIDTH_PX = 794
 
   const attachActiveHeadingObserver = useCallback((): boolean => {
     headingObserverRef.current?.disconnect()
-    if (previewMode !== 'edited') {
-      setActiveHeading('')
-      return false
-    }
     const frame = frameRef.current
     const doc = frame?.contentDocument
     if (!doc) return false
@@ -117,7 +102,7 @@ export default function TypesetHtmlPreview({
     headings.forEach(h => observer.observe(h))
     headingObserverRef.current = observer
     return true
-  }, [previewMode])
+  }, [])
 
   useEffect(() => {
     // srcdoc dimuat secara async — observer perlu retry sampai iframe siap.
@@ -129,7 +114,7 @@ export default function TypesetHtmlPreview({
       window.clearInterval(id)
       headingObserverRef.current?.disconnect()
     }
-  }, [html, previewMode, attachActiveHeadingObserver])
+  }, [html, attachActiveHeadingObserver])
 
   // Zoom "sesuai lebar": lebar halaman A4 disamakan dengan lebar kotak pratinjau.
   const fitToWidth = () => {
@@ -142,10 +127,6 @@ export default function TypesetHtmlPreview({
   useEffect(() => {
     onJumpHandledRef.current = onJumpToTextHandled
   }, [onJumpToTextHandled])
-
-  useEffect(() => {
-    setPreviewMode(sourceFormat === 'pdf' ? 'original' : 'edited')
-  }, [docId, sourceFormat])
 
   const render = useCallback(async () => {
     abortRef.current?.abort()
@@ -211,7 +192,7 @@ export default function TypesetHtmlPreview({
   useEffect(() => {
     const needle = normalizeSearchText(jumpToText || '')
     const frame = frameRef.current
-    if (previewMode !== 'edited' || !frame || !needle) {
+    if (!frame || !needle) {
       if (needle) onJumpHandledRef.current?.()
       return
     }
@@ -239,7 +220,7 @@ export default function TypesetHtmlPreview({
     return () => {
       cancelled = true
     }
-  }, [previewMode, jumpToText, html])
+  }, [jumpToText, html])
 
   const capturePage = () => {
     if (!onCapture) return
@@ -281,8 +262,11 @@ export default function TypesetHtmlPreview({
         .replace(/[\\/:*?"<>|]/g, '-')
         .slice(0, 80) || 'dokumen'
     try {
+      // Markdown-first: PDF dirender lewat jalur typeset (Chromium) yang SAMA
+      // dengan pratinjau ini, jadi yang diunduh persis yang di layar. Bukan
+      // `export-latex` (tectonic) yang dulu bikin hasil beda dengan pratinjau.
       const res = await fetch(
-        `/api/v1/co_writer/documents/${encodeURIComponent(docId)}/export-latex?format=pdf`,
+        `/api/v1/co_writer/documents/${encodeURIComponent(docId)}/export?format=pdf`,
         { cache: 'no-store' }
       )
       if (!res.ok) {
@@ -307,35 +291,8 @@ export default function TypesetHtmlPreview({
       {/* Kontrol */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
         <div className="flex items-center gap-1">
-          {hasOriginalPdf ? (
-            <div className="mr-1 flex rounded-md border border-[var(--border)] bg-[var(--background)] p-0.5">
-              <button
-                type="button"
-                onClick={() => setPreviewMode('original')}
-                className={`h-6 rounded px-2 text-[10.5px] font-medium transition-colors ${
-                  previewMode === 'original'
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                    : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                }`}
-              >
-                {t('Asli')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewMode('edited')}
-                title={t('Pratinjau hasil edit dari dokumen aktif — tata letak disusun ulang')}
-                className={`h-6 rounded px-2 text-[10.5px] font-medium transition-colors ${
-                  previewMode === 'edited'
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                    : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                }`}
-              >
-                {t('Hasil edit')}
-              </button>
-            </div>
-          ) : null}
           <span className="text-[10.5px] text-[var(--muted-foreground)]">
-            {previewMode === 'edited' ? t('Pratinjau HTML') : t('PDF asli')}
+            {t('Pratinjau HTML')}
           </span>
         </div>
 
@@ -352,7 +309,7 @@ export default function TypesetHtmlPreview({
         </div>
 
         <div className="flex items-center gap-1">
-          {loading && previewMode === 'edited' && (
+          {loading && (
             <span className="mr-1 flex items-center gap-1 text-[10.5px] text-[var(--muted-foreground)]">
               <Loader2 size={11} className="animate-spin" />
               {t('Memperbarui pratinjau...')}
@@ -364,7 +321,7 @@ export default function TypesetHtmlPreview({
               {t('Mencari bagian...')}
             </span>
           ) : null}
-          {error && previewMode === 'edited' && (
+          {error && (
             <span className="mr-1 flex max-w-[220px] items-center gap-1 truncate text-[10.5px] text-amber-600 dark:text-amber-400">
               <AlertTriangle size={12} className="shrink-0" />
               <span className="truncate">{error}</span>
@@ -383,7 +340,7 @@ export default function TypesetHtmlPreview({
           <button
             type="button"
             onClick={capturePage}
-            disabled={!html || !onCapture || previewMode !== 'edited'}
+            disabled={!html || !onCapture}
             title={t('Send this page to the assistant')}
             className="rounded p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-30"
           >
@@ -392,7 +349,6 @@ export default function TypesetHtmlPreview({
           <button
             type="button"
             onClick={() => void render()}
-            disabled={previewMode === 'original'}
             title={t('Render ulang')}
             className="rounded p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-30"
           >
@@ -434,63 +390,48 @@ export default function TypesetHtmlPreview({
         ref={previewBoxRef}
         className="min-h-0 flex-1 overflow-auto bg-[var(--muted)]/30 p-6"
       >
-        {previewMode === 'edited' ? (
-          html ? (
-            <div
-              className="origin-top transition-transform"
-              style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%` }}
-            >
-              <iframe
-                ref={frameRef}
-                title={t('Pratinjau dokumen')}
-                sandbox="allow-same-origin"
-                srcDoc={html}
-                className="h-[calc(100vh-160px)] w-full border-0 bg-white shadow-lg"
-              />
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              {loading ? (
-                <p className="text-center text-[12px] text-[var(--muted-foreground)]">
-                  {t('Menyusun pratinjau...')}
-                </p>
-              ) : (
-                <div className="flex flex-col items-center gap-3 text-center">
-                  {error ? (
-                    <>
-                      <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400" />
-                      <p className="max-w-xs text-[12px] text-[var(--foreground)]">{error}</p>
-                    </>
-                  ) : (
-                    <p className="text-[12px] text-[var(--muted-foreground)]">
-                      {t('Belum ada hasil pratinjau.')}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void render()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[11px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]/55"
-                  >
-                    <RefreshCw size={11} />
-                    {t('Coba lagi')}
-                  </button>
-                </div>
-              )}
-            </div>
-          )
+        {html ? (
+          <div
+            className="origin-top transition-transform"
+            style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%` }}
+          >
+            <iframe
+              ref={frameRef}
+              title={t('Pratinjau dokumen')}
+              sandbox="allow-same-origin"
+              srcDoc={html}
+              className="h-[calc(100vh-160px)] w-full border-0 bg-white shadow-lg"
+            />
+          </div>
         ) : (
-          <iframe
-            title={t('PDF asli')}
-            src={`/api/v1/co_writer/documents/${encodeURIComponent(docId)}/source`}
-            onLoad={() => setSourceError(null)}
-            onError={() => setSourceError(t('PDF asli gagal dimuat.'))}
-            className="h-[calc(100vh-160px)] w-full border-0 bg-white shadow-lg"
-          />
-        )}
-        {sourceError && previewMode === 'original' && (
-          <p className="mt-2 text-center text-[11px] text-amber-600 dark:text-amber-400">
-            {sourceError}
-          </p>
+          <div className="flex h-full items-center justify-center">
+            {loading ? (
+              <p className="text-center text-[12px] text-[var(--muted-foreground)]">
+                {t('Menyusun pratinjau...')}
+              </p>
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-center">
+                {error ? (
+                  <>
+                    <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400" />
+                    <p className="max-w-xs text-[12px] text-[var(--foreground)]">{error}</p>
+                  </>
+                ) : (
+                  <p className="text-[12px] text-[var(--muted-foreground)]">
+                    {t('Belum ada hasil pratinjau.')}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void render()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[11px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]/55"
+                >
+                  <RefreshCw size={11} />
+                  {t('Coba lagi')}
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

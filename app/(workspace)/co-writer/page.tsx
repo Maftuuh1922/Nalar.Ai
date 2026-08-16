@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import {
   Copy,
   FileText,
+  Folder as FolderIcon,
   FolderInput,
   Loader2,
   MoreHorizontal,
@@ -17,14 +18,23 @@ import {
 } from "lucide-react";
 import {
   createCoWriterDocument,
+  createCoWriterFolder,
   deleteCoWriterDocument,
+  deleteCoWriterFolder,
   importFileToCoWriter,
   listCoWriterDocuments,
+  listCoWriterFolders,
+  moveDocumentToFolder,
   updateCoWriterDocument,
+  updateCoWriterFolder,
   type CoWriterDocumentSummary,
+  type CoWriterFolder,
 } from "@/lib/co-writer-api";
 import { notifyCoWriterChanged } from "@/lib/co-writer-events";
-import { CO_WRITER_SAMPLE_TEMPLATE } from "./sampleTemplate";
+import FolderTree, {
+  ROOT_SELECTION,
+  type FolderSelection,
+} from "@/components/co-writer/FolderTree";
 
 function relativeTime(seconds: number): string {
   if (!seconds || Number.isNaN(seconds)) return "";
@@ -102,6 +112,10 @@ export default function CoWriterHomePage() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  // Folder: `null` = semua dokumen, `"root"` = draf tanpa folder, UUID = folder itu.
+  const [folders, setFolders] = useState<CoWriterFolder[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<FolderSelection>(null);
+  const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -116,9 +130,18 @@ export default function CoWriterHomePage() {
     }
   }, []);
 
+  const refreshFolders = useCallback(async () => {
+    try {
+      setFolders(await listCoWriterFolders());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void refreshFolders();
+  }, [refresh, refreshFolders]);
 
   // Pastikan interval simulasi progres impor tidak bocor bila pengguna
   // berpindah halaman di tengah impor (finally tidak sempat jalan).
@@ -132,13 +155,17 @@ export default function CoWriterHomePage() {
   }, []);
 
   const handleCreate = useCallback(
-    async (withTemplate: boolean) => {
+    async () => {
       if (creating) return;
       setCreating(true);
       setError("");
       try {
         const document = await createCoWriterDocument({
-          content: withTemplate ? CO_WRITER_SAMPLE_TEMPLATE : "",
+          content: "",
+          // Draf baru langsung masuk folder yang sedang dibuka; "Semua dokumen"
+          // dan "Tanpa folder" tetap membuatnya di akar.
+          folder_id:
+            selectedFolder && selectedFolder !== ROOT_SELECTION ? selectedFolder : null,
         });
         notifyCoWriterChanged();
         router.push(`/co-writer/${document.id}`);
@@ -147,7 +174,7 @@ export default function CoWriterHomePage() {
         setCreating(false);
       }
     },
-    [creating, router],
+    [creating, router, selectedFolder],
   );
 
   const handleImportFile = useCallback(
@@ -211,13 +238,14 @@ export default function CoWriterHomePage() {
         setPendingDeleteId(null);
         setMenuOpenId(null);
         notifyCoWriterChanged();
+        void refreshFolders();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setDeletingId(null);
       }
     },
-    [deletingId],
+    [deletingId, refreshFolders],
   );
 
   const handleDuplicate = useCallback(
@@ -226,6 +254,7 @@ export default function CoWriterHomePage() {
         const copy = await createCoWriterDocument({
           title: `${doc.title || "Untitled"} (salinan)`,
           content: "",
+          folder_id: doc.folder_id,
         });
         notifyCoWriterChanged();
         setDocuments((prev) => [
@@ -235,15 +264,17 @@ export default function CoWriterHomePage() {
             created_at: copy.created_at,
             updated_at: copy.updated_at,
             preview: "",
+            folder_id: doc.folder_id,
           },
           ...prev,
         ]);
+        void refreshFolders();
         setMenuOpenId(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [],
+    [refreshFolders],
   );
 
   const handleRename = useCallback(
@@ -278,11 +309,136 @@ export default function CoWriterHomePage() {
     setMenuOpenId(null);
   }, []);
 
+  // ── Folder ──
+  const handleMove = useCallback(
+    async (docId: string, folderId: string | null) => {
+      setMenuOpenId(null);
+      setMoveMenuId(null);
+      // Kartu dipindahkan lebih dulu supaya perpindahan terasa langsung;
+      // hitungan folder menyusul dari server.
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, folder_id: folderId } : d)),
+      );
+      try {
+        await moveDocumentToFolder(docId, folderId);
+        await refreshFolders();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        await refresh();
+      }
+    },
+    [refresh, refreshFolders],
+  );
+
+  const handleCreateFolder = useCallback(
+    async (name: string, parentId: string | null) => {
+      try {
+        const folder = await createCoWriterFolder({ name, parent_id: parentId });
+        await refreshFolders();
+        setSelectedFolder(folder.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refreshFolders],
+  );
+
+  const handleUpdateFolder = useCallback(
+    async (folderId: string, patch: { name?: string; color?: string | null }) => {
+      try {
+        await updateCoWriterFolder(folderId, patch);
+        await refreshFolders();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refreshFolders],
+  );
+
+  const handleDeleteFolder = useCallback(
+    async (folderId: string) => {
+      try {
+        await deleteCoWriterFolder(folderId);
+        // Isi folder tidak dihapus, hanya naik ke induk — daftar draf ikut
+        // dimuat ulang agar folder_id-nya yang baru terlihat.
+        if (selectedFolder === folderId) setSelectedFolder(null);
+        await Promise.all([refresh(), refreshFolders()]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh, refreshFolders, selectedFolder],
+  );
+
+  /** Folder terpilih beserta seluruh keturunannya. */
+  const visibleFolderIds = useMemo(() => {
+    if (!selectedFolder || selectedFolder === ROOT_SELECTION) return null;
+    const ids = new Set([selectedFolder]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const f of folders) {
+        if (f.parent_id && ids.has(f.parent_id) && !ids.has(f.id)) {
+          ids.add(f.id);
+          grew = true;
+        }
+      }
+    }
+    return ids;
+  }, [folders, selectedFolder]);
+
+  const rootCount = useMemo(
+    () => documents.filter((d) => !d.folder_id).length,
+    [documents],
+  );
+
+  /**
+   * Nama, warna, dan jalur lengkap per id folder. Kartu memakai ini supaya
+   * terlihat dari daftar mana pun folder tempat draf itu berada — tanpa ini,
+   * draf yang sudah dikelompokkan tak bisa dibedakan dari yang belum.
+   */
+  const folderById = useMemo(() => {
+    const byId = new Map(folders.map((f) => [f.id, f]));
+    const info = new Map<
+      string,
+      { name: string; color: string | null; path: string }
+    >();
+    for (const folder of folders) {
+      const parts = [folder.name];
+      let cursor = folder.parent_id;
+      // Kedalaman dibatasi server, tapi penghitung ini menjaga loop tetap
+      // berhenti kalau data induk pernah rusak dan membentuk siklus.
+      let guard = 0;
+      while (cursor && guard < 16) {
+        const parent = byId.get(cursor);
+        if (!parent) break;
+        parts.unshift(parent.name);
+        cursor = parent.parent_id;
+        guard += 1;
+      }
+      info.set(folder.id, {
+        name: folder.name,
+        color: folder.color,
+        path: parts.join(" / "),
+      });
+    }
+    return info;
+  }, [folders]);
+
+  // Panel folder hanya berguna kalau sudah ada isinya; saat kosong halaman
+  // menyisakan onboarding saja.
+  const showFolderPanel = !loading && (documents.length > 0 || folders.length > 0);
+
   // ── PRD 11.4: sort + filter ──
   const filtered = useMemo(() => {
     let list = documents.filter((doc) => {
       if (typeFilter !== "all" && guessDocType(doc) !== typeFilter) return false;
       if (statusFilter !== "all" && draftStatus(doc) !== statusFilter) return false;
+      if (selectedFolder === ROOT_SELECTION && doc.folder_id) return false;
+      // Memilih folder induk ikut menampilkan isi subfoldernya; kalau tidak,
+      // draf yang tersimpan lebih dalam akan terlihat hilang.
+      if (visibleFolderIds && !(doc.folder_id && visibleFolderIds.has(doc.folder_id)))
+        return false;
       return true;
     });
     const sorters: Record<SortKey, (a: CoWriterDocumentSummary, b: CoWriterDocumentSummary) => number> = {
@@ -294,7 +450,7 @@ export default function CoWriterHomePage() {
     list = [...list].sort(sorters[sortKey]);
     // Pin ke atas dulu
     return [...list.filter((d) => pinnedIds.has(d.id)), ...list.filter((d) => !pinnedIds.has(d.id))];
-  }, [documents, sortKey, typeFilter, statusFilter, pinnedIds]);
+  }, [documents, sortKey, typeFilter, statusFilter, pinnedIds, selectedFolder, visibleFolderIds]);
 
   // ── PRD 11.3: grup draft kosong lama (>14 hari) ──
   const { staleEmpty, activeDrafts } = useMemo(() => {
@@ -320,12 +476,18 @@ export default function CoWriterHomePage() {
     const prog = sectionProgress(doc);
     const menuOpen = menuOpenId === doc.id;
     const isRenaming = renamingId === doc.id;
+    const folderInfo = doc.folder_id ? folderById.get(doc.folder_id) : undefined;
 
     return (
       <div
         key={doc.id}
         role="button"
         tabIndex={0}
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData("text/plain", doc.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
         onClick={() => router.push(`/co-writer/${doc.id}`)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -385,8 +547,28 @@ export default function CoWriterHomePage() {
                   {doc.title || t("Untitled draft")}
                 </div>
               )}
-              <div className="mt-0.5 text-[11px] text-[var(--muted-foreground)]/70">
-                {t("Updated")} {relativeTime(doc.updated_at)} {t("ago")}
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-[var(--muted-foreground)]/70">
+                <span className="shrink-0">
+                  {t("Updated")} {relativeTime(doc.updated_at)} {t("ago")}
+                </span>
+                {folderInfo ? (
+                  <>
+                    <span className="shrink-0">·</span>
+                    {/* Jalur lengkap disimpan di title: nama folder saja bisa
+                        ambigu kalau ada subfolder bernama sama. */}
+                    <span
+                      className="flex min-w-0 items-center gap-1"
+                      title={folderInfo.path}
+                    >
+                      <FolderIcon
+                        size={10}
+                        className="shrink-0"
+                        style={{ color: folderInfo.color || undefined }}
+                      />
+                      <span className="truncate">{folderInfo.name}</span>
+                    </span>
+                  </>
+                ) : null}
               </div>
             </div>
           </div>
@@ -447,6 +629,50 @@ export default function CoWriterHomePage() {
               >
                 <Pin size={12} /> {isPinned ? t("Unpin") : t("Pin ke atas")}
               </button>
+              {/* Jalur utama pemindahan: drag & drop tidak bisa diandalkan di
+                  layar sentuh maupun lewat keyboard. */}
+              <button
+                type="button"
+                onClick={() => setMoveMenuId(moveMenuId === doc.id ? null : doc.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-[var(--foreground)] hover:bg-[var(--muted)]/40"
+              >
+                <FolderInput size={12} /> {t("Pindah ke folder")}
+              </button>
+              {moveMenuId === doc.id ? (
+                <div className="max-h-40 overflow-y-auto border-t border-[var(--border)] pt-1">
+                  {doc.folder_id ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleMove(doc.id, null)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11.5px] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/40"
+                    >
+                      {t("Keluarkan dari folder")}
+                    </button>
+                  ) : null}
+                  {folders.length === 0 ? (
+                    <p className="px-2.5 py-1.5 text-[11px] text-[var(--muted-foreground)]/70">
+                      {t("Belum ada folder.")}
+                    </p>
+                  ) : (
+                    folders.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        disabled={f.id === doc.folder_id}
+                        onClick={() => void handleMove(doc.id, f.id)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11.5px] text-[var(--foreground)] hover:bg-[var(--muted)]/40 disabled:opacity-40"
+                      >
+                        <FolderIcon
+                          size={11}
+                          className="shrink-0"
+                          style={{ color: f.color || undefined }}
+                        />
+                        <span className="truncate">{f.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -513,19 +739,7 @@ export default function CoWriterHomePage() {
         </button>
         <button
           type="button"
-          onClick={() => handleCreate(true)}
-          disabled={creating}
-          className="flex flex-col items-center gap-1 rounded-xl border border-[var(--border)] px-4 py-3 text-[11.5px] text-[var(--foreground)] transition-colors hover:border-[var(--ring)] hover:bg-[var(--muted)]/30 disabled:opacity-60"
-        >
-          <FileText size={18} className="text-[var(--primary)]" />
-          {t("From Template")}
-          <span className="text-[10px] text-[var(--muted-foreground)]">
-            {t("Struktur jurnal standar")}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => handleCreate(false)}
+          onClick={() => handleCreate()}
           disabled={creating}
           className="flex flex-col items-center gap-1 rounded-xl border border-[var(--border)] px-4 py-3 text-[11.5px] text-[var(--foreground)] transition-colors hover:border-[var(--ring)] hover:bg-[var(--muted)]/30 disabled:opacity-60"
         >
@@ -544,10 +758,18 @@ export default function CoWriterHomePage() {
   );
 
   return (
-    <div className="h-full overflow-y-auto bg-[var(--background)]" onClick={() => menuOpenId && setMenuOpenId(null)}>
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <header className="mb-7 flex items-end justify-between gap-4">
-          <div>
+    <div
+      className="h-full overflow-y-auto bg-[var(--background)]"
+      onClick={() => {
+        if (menuOpenId) setMenuOpenId(null);
+        if (moveMenuId) setMoveMenuId(null);
+      }}
+    >
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        {/* Menumpuk di layar sempit. Sebelumnya `shrink-0` pada baris tombol
+            memaksa judul mengecil sampai wrap dan header meluber. */}
+        <header className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-[19px] font-semibold tracking-tight text-[var(--foreground)]">
               {t("Co-Writer")}
             </h1>
@@ -555,7 +777,7 @@ export default function CoWriterHomePage() {
               {t("Manage your LaTeX drafts and projects.")}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <input
               ref={importFileRef}
               type="file"
@@ -570,25 +792,18 @@ export default function CoWriterHomePage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)] disabled:opacity-60"
             >
               {importing ? <Loader2 size={14} className="animate-spin" /> : <FolderInput size={14} />}
-              {importing ? t("Importing…") : t("Import Laporan")}
+              <span className="whitespace-nowrap">
+                {importing ? t("Importing…") : t("Import Laporan")}
+              </span>
             </button>
             <button
               type="button"
-              onClick={() => handleCreate(true)}
-              disabled={creating}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)] disabled:opacity-60"
-            >
-              <FileText size={14} />
-              {t("From template")}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCreate(false)}
+              onClick={() => handleCreate()}
               disabled={creating}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              {t("New draft")}
+              <span className="whitespace-nowrap">{t("New draft")}</span>
             </button>
           </div>
         </header>
@@ -596,6 +811,67 @@ export default function CoWriterHomePage() {
         {error ? (
           <div className="mb-4 rounded-lg border border-rose-300/30 bg-rose-50/40 px-3 py-2 text-[12px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
             {error}
+          </div>
+        ) : null}
+
+        <div className="flex gap-6">
+          {showFolderPanel ? (
+            <FolderTree
+              className="hidden w-52 shrink-0 sm:flex"
+              folders={folders}
+              selectedId={selectedFolder}
+              totalCount={documents.length}
+              rootCount={rootCount}
+              onSelect={setSelectedFolder}
+              onCreate={handleCreateFolder}
+              onUpdate={handleUpdateFolder}
+              onDelete={handleDeleteFolder}
+              onDropDocument={handleMove}
+            />
+          ) : null}
+
+          <div className="min-w-0 flex-1">
+        {/* Layar sempit: folder jadi baris chip yang bisa di-scroll — pohon
+            selebar 208px tidak muat berdampingan dengan grid. */}
+        {showFolderPanel ? (
+          <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 sm:hidden">
+            <button
+              type="button"
+              onClick={() => setSelectedFolder(null)}
+              className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11.5px] transition-colors ${
+                selectedFolder === null
+                  ? "border-[var(--primary)] bg-[var(--muted)] text-[var(--foreground)]"
+                  : "border-[var(--border)] text-[var(--muted-foreground)]"
+              }`}
+            >
+              {t("Semua dokumen")} ({documents.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFolder(ROOT_SELECTION)}
+              className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11.5px] transition-colors ${
+                selectedFolder === ROOT_SELECTION
+                  ? "border-[var(--primary)] bg-[var(--muted)] text-[var(--foreground)]"
+                  : "border-[var(--border)] text-[var(--muted-foreground)]"
+              }`}
+            >
+              {t("Tanpa folder")} ({rootCount})
+            </button>
+            {folders.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setSelectedFolder(f.id)}
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11.5px] transition-colors ${
+                  selectedFolder === f.id
+                    ? "border-[var(--primary)] bg-[var(--muted)] text-[var(--foreground)]"
+                    : "border-[var(--border)] text-[var(--muted-foreground)]"
+                }`}
+              >
+                <FolderIcon size={11} style={{ color: f.color || undefined }} />
+                {f.name} ({f.document_count})
+              </button>
+            ))}
           </div>
         ) : null}
 
@@ -667,11 +943,15 @@ export default function CoWriterHomePage() {
             ) : null}
             {filtered.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[var(--border)] px-4 py-12 text-center text-[12.5px] text-[var(--muted-foreground)]">
-                {t("Tidak ada draft cocok dengan filter.")}
+                {selectedFolder
+                  ? t("Folder ini masih kosong. Seret draf ke sini atau pakai menu Pindah ke folder.")
+                  : t("Tidak ada draft cocok dengan filter.")}
               </div>
             ) : null}
           </>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Overlay progres impor: request tunggal bisa makan puluhan detik,

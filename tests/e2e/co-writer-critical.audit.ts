@@ -61,7 +61,7 @@ test.describe('Co-Writer critical research workflow', () => {
     }
   })
 
-  test('original PDF preview preserves the uploaded bytes', async ({ page }) => {
+  test('source endpoint preserves the uploaded PDF bytes', async ({ page }) => {
     test.setTimeout(180_000)
 
     const login = await page.request.post('/api/v1/auth/login', {
@@ -73,12 +73,12 @@ test.describe('Co-Writer critical research workflow', () => {
     pdf.setFontSize(16)
     pdf.text('Dokumen sumber asli', 24, 32)
     pdf.setFontSize(11)
-    pdf.text('Tata letak ini harus dipertahankan pada mode Asli.', 24, 48)
+    pdf.text('Tata letak ini disimpan utuh oleh endpoint /source.', 24, 48)
     const original = Buffer.from(pdf.output('arraybuffer'))
     const imported = await page.request.post('/api/v1/co_writer/import-file', {
       multipart: {
         file: {
-          name: 'uji-pratinjau-asli.pdf',
+          name: 'uji-source.pdf',
           mimeType: 'application/pdf',
           buffer: original,
         },
@@ -95,19 +95,6 @@ test.describe('Co-Writer critical research workflow', () => {
       expect(createHash('sha256').update(downloaded).digest('hex')).toBe(
         createHash('sha256').update(original).digest('hex')
       )
-
-      await page.goto(`/co-writer/${document.id}`)
-      await expect(page.getByRole('button', { name: 'Asli', exact: true })).toBeVisible({
-        timeout: 30_000,
-      })
-      await expect(page.getByRole('button', { name: 'Hasil edit', exact: true })).toBeVisible()
-      await expect(page.locator('.react-pdf__Page canvas')).toBeVisible({ timeout: 60_000 })
-      const canvasDensity = await page.locator('.react-pdf__Page canvas').evaluate(canvas => {
-        const rect = canvas.getBoundingClientRect()
-        return rect.width > 0 ? (canvas as HTMLCanvasElement).width / rect.width : 0
-      })
-      expect(canvasDensity).toBeGreaterThanOrEqual(1.9)
-      await expect(page.getByRole('button', { name: 'Unduh PDF', exact: true })).toBeEnabled()
     } finally {
       await page.request.delete(`/api/v1/co_writer/documents/${document.id}`)
     }

@@ -14,6 +14,7 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  MessagesSquare,
   Paperclip,
   RotateCcw,
   SearchCheck,
@@ -22,6 +23,7 @@ import {
   Sparkles,
   Square,
   Trash2,
+  WandSparkles,
   X,
 } from 'lucide-react'
 
@@ -76,6 +78,16 @@ interface CoWriterChatPanelProps {
   onInsert: (text: string) => void
   onOpenReferences?: () => void
   onOpenAgentic?: () => void
+  /** Buka modal "Edit Draf AI" (perbaiki/rapikan seluruh draf) dari panel. */
+  onOpenFullEdit?: () => void
+  /** Buka pemilih untuk mengimpor percakapan dari chat utama. */
+  onImportChat?: () => void
+  /** Percakapan dari chat utama → disuntikkan sebagai riwayat konteks. */
+  importedConversation?: {
+    title: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+  } | null
+  onImportedConversationConsumed?: () => void
   onExportPdf?: () => void | Promise<void>
   onExportDocx?: () => void | Promise<void>
   externalImage?: string | null
@@ -86,7 +98,16 @@ interface CoWriterChatPanelProps {
 }
 
 type WorkspaceAction =
-  'structure' | 'checks' | 'checkpoint' | 'references' | 'agentic' | 'review' | 'pdf' | 'docx'
+  | 'structure'
+  | 'checks'
+  | 'checkpoint'
+  | 'references'
+  | 'agentic'
+  | 'fulledit'
+  | 'importchat'
+  | 'review'
+  | 'pdf'
+  | 'docx'
 
 const API = '/api/v1/co_writer'
 
@@ -95,6 +116,10 @@ export default function CoWriterChatPanel({
   onInsert,
   onOpenReferences,
   onOpenAgentic,
+  onOpenFullEdit,
+  onImportChat,
+  importedConversation,
+  onImportedConversationConsumed,
   onExportPdf,
   onExportDocx,
   externalImage,
@@ -207,6 +232,29 @@ export default function CoWriterChatPanel({
     onExternalPromptConsumed?.()
   }, [externalPrompt, onExternalPromptConsumed])
 
+  // Percakapan yang diimpor dari chat utama → disuntikkan sebagai turn riwayat,
+  // sehingga tampil di panel DAN ikut terkirim lewat `history` ke backend chat.
+  useEffect(() => {
+    if (!importedConversation) return
+    const { title, messages } = importedConversation
+    if (messages.length > 0) {
+      const label = title || 'Percakapan chat utama'
+      setTurns(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `— Konteks diimpor dari chat utama: "${label}" —`,
+          insertable: false,
+        },
+        ...messages.map(m => ({ role: m.role, content: m.content, insertable: false })),
+      ])
+      setInput(
+        'Berdasarkan percakapan yang saya impor di atas, bantu saya lanjutkan penulisan laporan.'
+      )
+    }
+    onImportedConversationConsumed?.()
+  }, [importedConversation, onImportedConversationConsumed])
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns, busy])
@@ -316,6 +364,17 @@ export default function CoWriterChatPanel({
           addAssistantTurn(
             'Agentic Write dibuka. Pilih grup referensi dan jenis bab yang ingin ditulis.'
           )
+          return
+        }
+        if (action === 'fulledit') {
+          onOpenFullEdit?.()
+          addAssistantTurn(
+            'Editor "Edit Draf AI" dibuka — beri instruksi untuk merapikan atau memperbaiki seluruh draf.'
+          )
+          return
+        }
+        if (action === 'importchat') {
+          onImportChat?.()
           return
         }
         if (action === 'docx') {
@@ -454,7 +513,16 @@ export default function CoWriterChatPanel({
         setBusy(false)
       }
     },
-    [addAssistantTurn, docId, onExportDocx, onExportPdf, onOpenAgentic, onOpenReferences]
+    [
+      addAssistantTurn,
+      docId,
+      onExportDocx,
+      onExportPdf,
+      onOpenAgentic,
+      onOpenFullEdit,
+      onImportChat,
+      onOpenReferences,
+    ]
   )
 
   const send = useCallback(async () => {
@@ -464,22 +532,52 @@ export default function CoWriterChatPanel({
     setError('')
     const imageForTurn = attachedImage
     setTurns(prev => [...prev, { role: 'user', content: text, image: imageForTurn ?? undefined }])
+    
+    // ── Slash command parser ──
+    if (text.startsWith('/')) {
+      const cmd = text.slice(1).toLowerCase().trim()
+      const slashActions: Record<string, WorkspaceAction | null> = {
+        'review': 'review',
+        'ai': 'review',
+        'struktur': 'structure',
+        'structure': 'structure',
+        'sitasi': 'checks',
+        'checks': 'checks',
+        'referensi': 'references',
+        'references': 'references',
+        'agentic': 'agentic',
+        'checkpoint': 'checkpoint',
+        'versi': 'checkpoint',
+        'pdf': 'pdf',
+        'word': 'docx',
+        'docx': 'docx',
+      }
+      const slashAction = slashActions[cmd] || null
+      if (slashAction) {
+        await runWorkspaceAction(slashAction)
+        return
+      }
+    }
+    
     const normalized = text.toLowerCase()
-    const directAction: WorkspaceAction | null = /cek.*struktur|kelengkapan.*bab/.test(normalized)
-      ? 'structure'
-      : /cek.*sitasi|klaim.*sitasi|konsistensi.*istilah/.test(normalized)
-        ? 'checks'
-        : /simpan.*checkpoint|buat.*checkpoint|simpan.*versi/.test(normalized)
-          ? 'checkpoint'
-          : /buka.*referensi|lihat.*referensi/.test(normalized)
-            ? 'references'
-            : /buka.*agentic|agentic write/.test(normalized)
-              ? 'agentic'
-              : /ekspor|export|unduh|download/.test(normalized) && /pdf/.test(normalized)
-                ? 'pdf'
-                : /ekspor|export|unduh|download/.test(normalized) && /word|docx/.test(normalized)
-                  ? 'docx'
-                  : null
+    const directAction: WorkspaceAction | null =
+      /cek.*struktur|kelengkapan.*bab/.test(normalized)
+        ? 'structure'
+        : /cek.*sitasi|klaim.*sitasi|konsistensi.*istilah/.test(normalized)
+          ? 'checks'
+          : /review.*ai|ai.*review/.test(normalized)
+            ? 'review'
+            : /simpan.*checkpoint|buat.*checkpoint|simpan.*versi/.test(normalized)
+              ? 'checkpoint'
+              : /buka.*referensi|lihat.*referensi/.test(normalized)
+                ? 'references'
+                : /buka.*agentic|agentic write/.test(normalized)
+                  ? 'agentic'
+                  : /ekspor|export|unduh|download/.test(normalized) && /pdf/.test(normalized)
+                    ? 'pdf'
+                    : /ekspor|export|unduh|download/.test(normalized) && /word|docx/.test(normalized)
+                      ? 'docx'
+                      : null
     if (directAction) {
       await runWorkspaceAction(directAction)
       return
@@ -602,6 +700,8 @@ export default function CoWriterChatPanel({
                   ['review', Sparkles, t('Review AI')],
                   ['references', BookOpen, t('Referensi')],
                   ['agentic', Bot, t('Tulis bab')],
+                  ['fulledit', WandSparkles, t('Edit Draf')],
+                  ['importchat', MessagesSquare, t('Impor chat')],
                   ['checkpoint', History, t('Simpan versi')],
                   ['pdf', FileDown, t('Ekspor PDF')],
                   ['docx', FileDown, t('Ekspor Word')],
@@ -1110,7 +1210,7 @@ export default function CoWriterChatPanel({
               }
             }}
             rows={2}
-            placeholder={t('Tanya AI tentang referensi atau draf…')}
+            placeholder={t('Ketik /review, /struktur, /sitasi, /referensi… atau tanya AI tentang draf…')}
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 text-[12.5px] text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)]"
           />
           <button

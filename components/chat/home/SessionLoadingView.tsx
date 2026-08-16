@@ -57,11 +57,11 @@ export default function SessionLoadingView({
       {/* Logo + pixel-grid loader */}
       <div className="flex flex-col items-center gap-4">
         <img
-          src="/logo_black.png"
+          src="/branding/nalar-ai-hero.jpg"
           alt="Nalar AI"
           width={32}
           height={32}
-          className="h-8 w-8 select-none"
+          className="h-8 w-8 select-none rounded-md object-cover object-center"
           draggable={false}
         />
         <span

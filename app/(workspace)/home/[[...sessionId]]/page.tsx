@@ -1709,15 +1709,17 @@ export default function ChatPage() {
               </div>
             ) : !hasMessages ? (
               <div className="flex w-full flex-1 min-h-0 items-end justify-center pb-14 animate-fade-in px-6">
-                <div className="ascii-hero w-full max-w-[960px] flex items-center justify-center gap-4">
-                  <img
-                    src="/logo_black.png"
-                    alt="Nalar AI"
-                    width={40}
-                    height={40}
-                    className="h-10 w-10 select-none"
-                    draggable={false}
-                  />
+                <div className="ascii-hero flex h-full min-h-0 w-full max-w-[960px] flex-col items-center justify-end gap-4">
+                  <div className="relative w-full min-h-0 flex-1 max-h-[130px] overflow-hidden rounded-2xl md:max-h-[150px]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/branding/nalar-ai-hero.jpg"
+                      alt="Nalar AI"
+                      className="h-full w-full object-cover object-center select-none"
+                      draggable={false}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/20 to-transparent" />
+                  </div>
                   <h1 className="font-serif text-[40px] font-medium leading-[1.1] tracking-[-0.015em] text-[var(--foreground)]">
                     {welcomeGreeting === null
                       ? t('What would you like to learn?')

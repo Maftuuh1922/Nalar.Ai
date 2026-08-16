@@ -1000,7 +1000,7 @@ export function UnifiedChatProvider({
     (messages: SessionMessage[]): MessageItem[] => {
       return messages
         .filter((message) => message.role !== "system")
-        .map((message) => {
+        .map((message, index, ordered) => {
           const raw = normalizeMessageContent(message.content as unknown);
           const attachments = hydrateMessageAttachments(message.attachments);
           const requestSnapshot = hydrateRequestSnapshot(
@@ -1008,6 +1008,17 @@ export function UnifiedChatProvider({
             raw,
             attachments,
           );
+          // The session endpoint returns a flat, chronological list and omits
+          // ``parent_message_id`` entirely. Left as null, every row would look
+          // like a root sibling and ``buildVisiblePath`` would render only the
+          // last one — the whole history would vanish. So when the field is
+          // absent we rebuild the chain the server actually stored: each
+          // message hangs off the one before it. An explicit ``null`` still
+          // means root and is honoured as-is.
+          const parentMessageId =
+            message.parent_message_id === undefined
+              ? (ordered[index - 1]?.id ?? null)
+              : message.parent_message_id;
           return {
             id: message.id,
             role: message.role,
@@ -1018,10 +1029,7 @@ export function UnifiedChatProvider({
             capability: message.capability || "",
             events: Array.isArray(message.events) ? message.events : [],
             attachments,
-            parentMessageId:
-              message.parent_message_id === undefined
-                ? null
-                : message.parent_message_id,
+            parentMessageId,
             ...(requestSnapshot ? { requestSnapshot } : {}),
           };
         });

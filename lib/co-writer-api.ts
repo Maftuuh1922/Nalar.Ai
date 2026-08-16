@@ -8,6 +8,8 @@ export interface CoWriterDocumentSummary {
   created_at: number;
   updated_at: number;
   preview: string;
+  /** Folder tempat draf disimpan; null = akar (belum dikelompokkan). */
+  folder_id: string | null;
 }
 
 export interface CoWriterDocument {
@@ -17,6 +19,12 @@ export interface CoWriterDocument {
   created_at: number;
   updated_at: number;
   source_format?: string | null;
+  /**
+   * Format `content`: "markdown" (sumber kebenaran baru) atau "latex" (draf
+   * lama, dikonversi ke markdown saat dibuka). Menentukan editor mana yang
+   * terbuka secara bawaan.
+   */
+  content_format?: "markdown" | "latex" | null;
 }
 
 export interface CoWriterFile {
@@ -68,10 +76,15 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function listCoWriterDocuments(): Promise<
-  CoWriterDocumentSummary[]
-> {
-  const res = await apiFetch(apiUrl(`${BASE}/documents`), {
+/**
+ * @param folderId UUID folder (termasuk isi subfoldernya), `"root"` untuk draf
+ * tanpa folder, atau kosong untuk semua draf.
+ */
+export async function listCoWriterDocuments(
+  folderId?: string | null,
+): Promise<CoWriterDocumentSummary[]> {
+  const query = folderId ? `?folder_id=${encodeURIComponent(folderId)}` : "";
+  const res = await apiFetch(apiUrl(`${BASE}/documents${query}`), {
     cache: "no-store",
   });
   const data = await jsonOrThrow<{ documents: CoWriterDocumentSummary[] }>(res);
@@ -81,6 +94,7 @@ export async function listCoWriterDocuments(): Promise<
 export async function createCoWriterDocument(payload?: {
   title?: string;
   content?: string;
+  folder_id?: string | null;
 }): Promise<CoWriterDocument> {
   const res = await apiFetch(apiUrl(`${BASE}/documents`), {
     method: "POST",
@@ -88,6 +102,7 @@ export async function createCoWriterDocument(payload?: {
     body: JSON.stringify({
       title: payload?.title ?? null,
       content: payload?.content ?? "",
+      folder_id: payload?.folder_id ?? null,
     }),
   });
   return jsonOrThrow<CoWriterDocument>(res);
@@ -211,18 +226,6 @@ export async function restoreCoWriterCheckpoint(
   return jsonOrThrow<CoWriterDocument>(res);
 }
 
-/**
- * SFDT (JSON Syncfusion Document Editor) — representasi kerja editor ala Word.
- * Kosong bila dokumen belum pernah dibuka di editor baru.
- */
-export async function getCoWriterSfdt(docId: string): Promise<{ sfdt: string }> {
-  const res = await apiFetch(
-    apiUrl(`${BASE}/documents/${encodeURIComponent(docId)}/sfdt`),
-    { cache: "no-store" },
-  );
-  return jsonOrThrow<{ sfdt: string }>(res);
-}
-
 /** Berkas asli yang diunggah (DOCX/PDF/dll.) untuk impor berfidelitas tinggi. */
 export async function getCoWriterSource(docId: string): Promise<Blob> {
   const res = await apiFetch(
@@ -248,6 +251,24 @@ export async function getWorkingDocx(docId: string): Promise<Blob> {
     throw new Error(`Request failed (${res.status}): ${text || res.statusText}`);
   }
   return res.blob();
+}
+
+/** Simpan DOCX kerja dari editor SuperDoc (autosave mode Word).
+ *
+ * Ini SATU-SATUNYA sumber kebenaran mode Word: apa yang tampil di editor =
+ * apa yang tersimpan = apa yang terunduh. Blob dikirim sebagai `multipart/
+ * form-data` (bukan JSON base64) supaya OOXML dokumen besar tidak membengkak. */
+export async function saveWorkingDocx(
+  docId: string,
+  blob: Blob,
+): Promise<{ ok: boolean; bytes: number }> {
+  const form = new FormData();
+  form.append("file", blob, "document.docx");
+  const res = await apiFetch(
+    apiUrl(`${BASE}/documents/${encodeURIComponent(docId)}/working-docx`),
+    { method: "PUT", body: form },
+  );
+  return jsonOrThrow<{ ok: boolean; bytes: number }>(res);
 }
 
 /** Ambil representasi Markdown yang sudah dirapikan (AST-first) untuk mengisi editor Word. */
@@ -355,6 +376,90 @@ export async function splitCoWriterDocument(
     ),
     checkpoint_id: data.checkpoint_id,
   };
+}
+
+// ── Folder (pengelompokan draf, boleh bersarang) ────────────────────────────
+
+export interface CoWriterFolder {
+  id: string;
+  name: string;
+  /** null = folder akar. */
+  parent_id: string | null;
+  /** Warna aksen "#rrggbb", null bila memakai warna bawaan. */
+  color: string | null;
+  /** Termasuk draf di seluruh subfolder, sesuai isi yang tampil saat dipilih. */
+  document_count: number;
+  created_at: number;
+}
+
+export async function listCoWriterFolders(): Promise<CoWriterFolder[]> {
+  const res = await apiFetch(apiUrl(`${BASE}/folders`), { cache: "no-store" });
+  const data = await jsonOrThrow<{ folders?: CoWriterFolder[] }>(res);
+  return Array.isArray(data?.folders) ? data.folders : [];
+}
+
+export async function createCoWriterFolder(payload: {
+  name: string;
+  parent_id?: string | null;
+  color?: string | null;
+}): Promise<CoWriterFolder> {
+  const res = await apiFetch(apiUrl(`${BASE}/folders`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: payload.name,
+      parent_id: payload.parent_id ?? null,
+      color: payload.color ?? null,
+    }),
+  });
+  return jsonOrThrow<CoWriterFolder>(res);
+}
+
+/**
+ * Field yang tidak disertakan tidak diubah. Menyertakan `parent_id: null`
+ * memindahkan folder ke akar — berbeda dari tidak mengirimnya sama sekali.
+ */
+export async function updateCoWriterFolder(
+  folderId: string,
+  payload: { name?: string; color?: string | null; parent_id?: string | null },
+): Promise<CoWriterFolder> {
+  const res = await apiFetch(
+    apiUrl(`${BASE}/folders/${encodeURIComponent(folderId)}`),
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  return jsonOrThrow<CoWriterFolder>(res);
+}
+
+/** Menghapus wadahnya saja: draf dan subfolder di dalamnya naik ke folder induk. */
+export async function deleteCoWriterFolder(folderId: string): Promise<void> {
+  const res = await apiFetch(
+    apiUrl(`${BASE}/folders/${encodeURIComponent(folderId)}`),
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Request failed (${res.status}): ${text || res.statusText}`);
+  }
+}
+
+/** `folderId: null` mengeluarkan draf ke akar. */
+export async function moveDocumentToFolder(
+  docId: string,
+  folderId: string | null,
+): Promise<CoWriterDocumentSummary> {
+  const res = await apiFetch(
+    apiUrl(`${BASE}/documents/${encodeURIComponent(docId)}/folder`),
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_id: folderId }),
+    },
+  );
+  return jsonOrThrow<CoWriterDocumentSummary>(res);
 }
 
 // ── Agentic write & integrasi Learning Space ────────────────────────────────

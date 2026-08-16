@@ -47,6 +47,11 @@ const LazyCodeBlock = dynamic(() => import("./RichCodeBlock"), {
   loading: () => null,
 });
 
+const LazyDiagramBlock = dynamic(() => import("./DiagramBlock"), {
+  ssr: false,
+  loading: () => <MermaidLoading />,
+});
+
 const GeogebraOpenCTA = dynamic(
   () => import("@/components/common/GeogebraOpenCTA"),
   { ssr: false, loading: () => null },
@@ -480,9 +485,27 @@ export default function RichMarkdownRenderer({
       const lineProps = isMultiline ? lineAttr(node) : {};
 
       if (lang === "mermaid" && enableMermaid) {
+        // Paired with a Code tab so the source stays reachable. Surfaces with
+        // rich code rendering off keep the bare diagram — a syntax-highlighted
+        // tab there would apply preferences the surface opted out of.
         return (
           <div {...lineProps}>
-            <LazyMermaid chart={raw} className={gap} />
+            {enableCode ? (
+              <LazyDiagramBlock raw={raw} lang="mermaid" className={gap} />
+            ) : (
+              <LazyMermaid chart={raw} className={gap} />
+            )}
+          </div>
+        );
+      }
+
+      // Legacy mxfile XML from conversations recorded while the chat backend
+      // prompted for Draw.io instead of Mermaid. Without this the fence falls
+      // through to the code block below and renders as raw XML.
+      if (lang === "drawio" && enableCode) {
+        return (
+          <div {...lineProps}>
+            <LazyDiagramBlock raw={raw} lang="drawio" className={gap} />
           </div>
         );
       }
