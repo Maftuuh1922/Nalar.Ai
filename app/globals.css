@@ -46,8 +46,7 @@
   }
 
   /* Dark — deep neutral canvas, same blue accent. */
-  .dark,
-  .theme-glass {
+  .dark {
     color-scheme: dark;
     --background: #2b2c2f;
     --foreground: #f2f3f4;
@@ -141,6 +140,119 @@
     font-family: var(--font-mono), ui-monospace, monospace;
   }
 
+  /* ── Glass: palet krem hangat ala Claude, permukaan tembus pandang ────────
+     Tema `glass` sebelumnya hanya alias tema gelap — terdaftar di lib/theme.ts
+     dan ThemeScript tapi tanpa satu pun translusensi. Blok ini yang membuatnya
+     benar-benar kaca, dengan palet hangat (krem + terakota) alih-alih biru.
+
+     Terang, bukan gelap. Kaca gelap memaksa teks terang di atas latar
+     berblur — kombinasi paling melelahkan untuk laporan yang dibaca berjam-jam.
+     Krem hangat memantulkan cahaya, jadi teks tetap gelap dan tajam sementara
+     efek kacanya tetap terasa.
+
+     Alfa permukaan dijaga 0.62–0.80, bukan 0.2 seperti mockup glassmorphism yang
+     biasa beredar: di bawah itu, teks 12px mulai bertabrakan dengan latar. */
+  .theme-glass {
+    color-scheme: light;
+    /* Kanvas dasar — krem hangat khas Claude. */
+    --background: #f5f1e8;
+    --foreground: #3d3d3a;
+    --glass-blur: 20px;
+    --glass-saturate: 125%;
+    /* Permukaan: makin ke depan makin pekat (card < popover). */
+    --card: rgba(255, 253, 248, 0.68);
+    --card-foreground: #3d3d3a;
+    --popover: rgba(255, 253, 248, 0.86);
+    --popover-foreground: #3d3d3a;
+    /* Terakota Claude. */
+    --primary: #d97757;
+    --primary-foreground: #ffffff;
+    --secondary: rgba(61, 61, 58, 0.06);
+    --secondary-foreground: #3d3d3a;
+    --muted: rgba(61, 61, 58, 0.05);
+    --muted-foreground: #6f6e69;
+    --accent: rgba(217, 119, 87, 0.1);
+    --accent-foreground: #7a3d24;
+    --destructive: #c1452f;
+    --destructive-foreground: #ffffff;
+    --success: #4f7a52;
+    --warning: #b8791f;
+    --border: rgba(61, 61, 58, 0.13);
+    --input: rgba(61, 61, 58, 0.16);
+    --ring: #d97757;
+    /* Sorotan tepi atas — yang membuat panel terbaca sebagai lempeng kaca. */
+    --glass-highlight: rgba(255, 255, 255, 0.7);
+    --glass-shadow: rgba(61, 55, 45, 0.35);
+    /* Kaca untuk sidebar/header (lebih tipis) dan bidang isian (lebih pekat). */
+    --glass-chrome: rgba(255, 253, 248, 0.55);
+    --glass-field: rgba(255, 255, 255, 0.62);
+    --overlay: rgba(61, 55, 45, 0.32);
+  }
+
+  /* Aura statis: `fixed` supaya tidak ikut menggulir. Gradien yang bergeser saat
+     scroll adalah sumber pusing paling sering pada tema kaca. */
+  .theme-glass body {
+    background-color: var(--background);
+    background-image:
+      radial-gradient(56rem 38rem at 10% -6%, rgba(217, 119, 87, 0.16), transparent 62%),
+      radial-gradient(44rem 32rem at 94% 2%, rgba(214, 178, 122, 0.18), transparent 60%),
+      radial-gradient(50rem 38rem at 78% 98%, rgba(180, 160, 200, 0.12), transparent 62%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+
+  /* ── Glass Dark: kaca berpalet cokelat gelap, aksen terakota yang sama ─────
+     Pasangan gelap dari tema di atas. Bukan tema `dark` biasa yang diberi blur:
+     kanvasnya cokelat-abu hangat (bukan biru-abu netral) supaya terakota tetap
+     terasa serumpun, dan permukaannya lebih pekat daripada versi terang —
+     kontras terang-di-atas-gelap lebih rapuh, jadi kaca yang terlalu tembus
+     langsung membuat teks 12px sulit dibaca. */
+  .theme-glass-dark {
+    color-scheme: dark;
+    --background: #262320;
+    --foreground: #ece7de;
+    --glass-blur: 20px;
+    --glass-saturate: 125%;
+    --card: rgba(58, 53, 48, 0.62);
+    --card-foreground: #ece7de;
+    --popover: rgba(52, 47, 43, 0.86);
+    --popover-foreground: #ece7de;
+    /* Terakota dinaikkan sedikit terangnya: #d97757 di atas kanvas gelap
+       kontrasnya hanya ~3:1, di bawah ambang teks kecil. */
+    --primary: #e08a68;
+    --primary-foreground: #24211e;
+    --secondary: rgba(236, 231, 222, 0.08);
+    --secondary-foreground: #ece7de;
+    --muted: rgba(236, 231, 222, 0.06);
+    --muted-foreground: #a8a19a;
+    --accent: rgba(224, 138, 104, 0.16);
+    --accent-foreground: #f0c4ae;
+    --destructive: #e8705c;
+    --destructive-foreground: #24211e;
+    --success: #7aab7e;
+    --warning: #d6a34e;
+    --border: rgba(236, 231, 222, 0.13);
+    --input: rgba(236, 231, 222, 0.16);
+    --ring: #e08a68;
+    /* Sorotan tepi jauh lebih redup: di atas gelap, sorotan 0.7 tampak seperti
+       garis putih yang menyilaukan. */
+    --glass-highlight: rgba(255, 255, 255, 0.08);
+    --glass-shadow: rgba(0, 0, 0, 0.55);
+    --glass-chrome: rgba(46, 42, 38, 0.58);
+    --glass-field: rgba(24, 21, 19, 0.5);
+    --overlay: rgba(14, 12, 10, 0.62);
+  }
+
+  .theme-glass-dark body {
+    background-color: var(--background);
+    background-image:
+      radial-gradient(56rem 38rem at 10% -6%, rgba(217, 119, 87, 0.2), transparent 62%),
+      radial-gradient(44rem 32rem at 94% 2%, rgba(184, 140, 82, 0.16), transparent 60%),
+      radial-gradient(50rem 38rem at 78% 98%, rgba(130, 110, 160, 0.14), transparent 62%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+
   button,
   input,
   select,
@@ -171,6 +283,99 @@
 
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* ── Bahasa visual tema Glass ────────────────────────────────────────────────
+   Utility yang dipakai komponen (`bg-[var(--card)]` dst.) hanya mengatur warna;
+   `backdrop-filter` harus diberikan lewat CSS. Menyasar nama kelas yang
+   dihasilkan Tailwind membuat seluruh aplikasi ikut berkaca tanpa menyentuh 80+
+   berkas komponen — dan otomatis berlaku untuk komponen baru yang memakai token
+   permukaan yang sama.
+
+   Blur diberikan lewat `@apply backdrop-blur-*`, BUKAN `backdrop-filter` mentah:
+   deklarasi mentah terukur hilang dari CSS yang tersaji (aturannya tetap ada,
+   tapi hanya `box-shadow`-nya yang bertahan), sementara utility Tailwind — yang
+   menyetel `--tw-backdrop-*` lalu menyusunnya sendiri — bertahan utuh.
+
+   `backdrop-filter` membuat elemen menjadi containing block baru. Karena itu
+   blur TIDAK dipasang pada pembungkus tata letak (elemen ber-`fixed`/`sticky` di
+   dalamnya bisa salah posisi), hanya pada permukaan yang memang lempeng kaca.
+
+   Kedua varian (terang & gelap) berbagi aturan yang sama lewat `:is()`; yang
+   berbeda hanya nilai tokennya, jadi tidak ada duplikasi bahasa visual. */
+:is(.theme-glass, .theme-glass-dark) :where(
+  .surface-card,
+  [role='dialog'],
+  .bg-\[var\(--card\)\],
+  .bg-\[var\(--popover\)\]
+) {
+  @apply backdrop-blur-xl backdrop-saturate-[1.25];
+  /* Sorotan tepi atas + bayangan lembut = kesan lempeng, bukan kotak pudar. */
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 6px 24px -14px var(--glass-shadow, rgba(61, 55, 45, 0.35));
+}
+
+/* Panel samping dan bilah kepala: kaca lebih tipis supaya aura di baliknya
+   tetap terbaca dan antarmuka tidak terasa berlapis-lapis pekat. */
+:is(.theme-glass, .theme-glass-dark) :where(aside, header) {
+  @apply backdrop-blur-lg backdrop-saturate-[1.25];
+  background-color: var(--glass-chrome);
+}
+
+/* Kolom masukan tetap terlihat sebagai bidang yang bisa diketik: sedikit lebih
+   pekat dari permukaan di sekitarnya, bukan ikut tembus pandang. */
+:is(.theme-glass, .theme-glass-dark)
+  :where(input, textarea, select):not([type='checkbox']):not([type='radio']) {
+  background-color: var(--glass-field);
+}
+
+/* Area BACA dikecualikan dari translusensi.
+   Halaman dokumen (pratinjau HTML/PDF, kertas editor, blok kode) memakai latar
+   putih dan teks hitam; menembuskannya membuat aura terakota menyembul di balik
+   tulisan laporan dan kontrasnya jatuh. Kertas tetap kertas — inilah yang
+   menjaga "full glass" tidak berubah menjadi "bikin pusing". */
+:is(.theme-glass, .theme-glass-dark) :where(iframe, canvas, pre, code) {
+  @apply backdrop-blur-none;
+  box-shadow: none;
+}
+
+/* Hormati preferensi sistem: sebagian pengguna menyetel transparansi berkurang
+   justru karena efek semacam ini memicu pusing. Kaca dimatikan, warnanya jatuh
+   ke permukaan pekat yang tetap terbaca. */
+@media (prefers-reduced-transparency: reduce) {
+  .theme-glass {
+    --card: #fffdf8;
+    --popover: #fffdf8;
+    --muted: #efece3;
+    --secondary: #efece3;
+    --glass-chrome: #f2eee4;
+    --glass-field: #ffffff;
+  }
+
+  .theme-glass-dark {
+    --card: #3a3530;
+    --popover: #342f2b;
+    --muted: #322d29;
+    --secondary: #322d29;
+    --glass-chrome: #2e2a26;
+    --glass-field: #1e1b18;
+  }
+
+  :is(.theme-glass, .theme-glass-dark) :where(
+    .surface-card,
+    [role='dialog'],
+    aside,
+    header,
+    .bg-\[var\(--card\)\],
+    .bg-\[var\(--popover\)\]
+  ) {
+    @apply backdrop-blur-none;
+  }
+
+  :is(.theme-glass, .theme-glass-dark) body {
+    background-image: none;
   }
 }
 

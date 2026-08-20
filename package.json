@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "postinstall": "node ./scripts/copy-superdoc-workers.mjs",
+    "superdoc:workers": "node ./scripts/copy-superdoc-workers.mjs",
     "dev": "node --max-old-space-size=2048 ./node_modules/next/dist/bin/next dev --turbopack",
     "dev:webpack": "node --max-old-space-size=2048 ./node_modules/next/dist/bin/next dev --webpack",
     "dev:turbo": "node --max-old-space-size=2560 ./node_modules/next/dist/bin/next dev --turbopack",

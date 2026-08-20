@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowRight,
   Bold,
-  Bot,
   Braces,
   Check,
   ChevronDown,
@@ -39,7 +38,6 @@ import {
   ListOrdered,
   ListTree,
   Loader2,
-  MessagesSquare,
   MoreHorizontal,
   Minus,
   NotebookPen,
@@ -76,14 +74,9 @@ import {
   type CoWriterOutlineHeading,
 } from '@/lib/co-writer-api'
 import { notifyCoWriterChanged } from '@/lib/co-writer-events'
-import { getSession } from '@/lib/session-api'
 import { useAppShell } from '@/context/AppShellContext'
 import AgenticRunPanel, { type FeToolResult } from '@/components/co-writer/AgenticRunPanel'
 import ReferenceSidebar from '@/components/co-writer/ReferenceSidebar'
-import CoWriterChatPanel from '@/components/co-writer/CoWriterChatPanel'
-import HistorySessionPicker, {
-  type SelectedHistorySession,
-} from '@/components/chat/HistorySessionPicker'
 import QuickCitePopup from '@/components/co-writer/QuickCitePopup'
 import SaveToNotebookModal, {
   type NotebookSavePayload,
@@ -127,7 +120,6 @@ const FOCUS_MODE_KEY = 'nalar-ai.co_writer.focus_mode'
 const FILE_TREE_OPEN_KEY = 'nalar-ai.co_writer.file_tree_open'
 const RIGHT_PANEL_OPEN_KEY = 'nalar-ai.co_writer.right_panel_open'
 
-const CHAT_PANEL_OPEN_KEY = 'nalar-ai.co_writer.chat_panel_open'
 const LOCAL_DRAFT_PREFIX = 'nalar-ai.co_writer.draft.'
 const AUTOSAVE_DEBOUNCE_MS = 1500
 const MIN_PANEL_RATIO = 0.18
@@ -452,10 +444,11 @@ interface StreamEditResult {
 export default function CoWriterPage() {
   const { t } = useTranslation()
   const router = useRouter()
-  // Tema "glass" ikut memasang kelas .dark di <html>, jadi editornya harus
-  // gelap juga — kalau tidak, kode LaTeX tampil hitam-di-hitam.
+  // Tema "glass" kini memakai palet krem hangat (terang) dan tidak lagi
+  // memasang kelas .dark, jadi editor kodenya harus terang — dengan tema gelap
+  // CodeMirror, teks kode tampil terang di atas kanvas krem dan nyaris hilang.
   const { theme } = useAppShell()
-  const editorDark = theme === 'dark' || theme === 'glass'
+  const editorDark = theme === 'dark'
   const params = useParams<{ docId?: string | string[] }>()
   const docId = useMemo(() => {
     const raw = params?.docId
@@ -520,7 +513,6 @@ export default function CoWriterPage() {
   const [sfdtLoadKey, setSfdtLoadKey] = useState(0)
   const [initialSyncFile, setInitialSyncFile] = useState<File | null>(null)
   const syncEditorRef = useRef<SuperDocEditorHandle | null>(null)
-  const [externalChatPrompt, setExternalChatPrompt] = useState<string | null>(null)
   // Async edits (full-draft edit, auto-mark, selection edit) must verify the
   // draft hasn't changed while the request was in flight before replacing
   // content. State captured in their closures is stale by then; this ref
@@ -536,22 +528,15 @@ export default function CoWriterPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [showChatImportPicker, setShowChatImportPicker] = useState(false)
-  const [importedConversation, setImportedConversation] = useState<{
-    title: string
-    messages: { role: 'user' | 'assistant'; content: string }[]
-  } | null>(null)
   // ── PRD v2.3: layout 3 kolom ──
   // Layout panel dipersist antar sesi (kecuali lebar file tree yang tetap
   // default). Mode fokus = tulis tanpa gangguan: panel samping disembunyikan.
   const [fileTreeOpen, setFileTreeOpen] = usePersistedState(FILE_TREE_OPEN_KEY, true)
   const [fileTreeWidth, setFileTreeWidth] = useState(220)
   const [isResizingFileTree, setIsResizingFileTree] = useState(false)
-  const [chatPanelOpen, setChatPanelOpen] = usePersistedState(CHAT_PANEL_OPEN_KEY, false)
-  const [capturedChatImage, setCapturedChatImage] = useState<string | null>(null)
-  const [rightPanelOpen, setRightPanelOpen] = usePersistedState(RIGHT_PANEL_OPEN_KEY, false)
+  const [rightPanelOpen, setRightPanelOpen] = usePersistedState(RIGHT_PANEL_OPEN_KEY, true)
   const [focusMode, setFocusMode] = usePersistedState(FOCUS_MODE_KEY, false)
-  const [rightPanelTab, setRightPanelTab] = useState<'referensi' | 'agentic'>('referensi')
+  const [rightPanelTab, setRightPanelTab] = useState<'referensi' | 'agentic'>('agentic')
   const [previewJumpText, setPreviewJumpText] = useState<string | null>(null)
   // ── PRD v2.3: Daftar Isi (TOC) overlay ──
   const [tocOpen, setTocOpen] = useState(false)
@@ -638,7 +623,6 @@ export default function CoWriterPage() {
     if (focusMode) {
       setFileTreeOpen(false)
       setRightPanelOpen(false)
-      setChatPanelOpen(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusMode])
@@ -1299,45 +1283,6 @@ export default function CoWriterPage() {
     }
     return markdown
   }, [editMode, markdown])
-
-  // Impor percakapan dari chat utama ke Asisten Agentic: ambil pesan tiap sesi
-  // terpilih, gabung, lalu suntikkan sebagai riwayat konteks di panel chat.
-  const handleApplyChatImport = useCallback(
-    async (sessions: SelectedHistorySession[]) => {
-      setShowChatImportPicker(false)
-      if (!sessions.length) return
-      try {
-        const details = await Promise.all(
-          sessions.map(session => getSession(session.sessionId).catch(() => null))
-        )
-        const messages: { role: 'user' | 'assistant'; content: string }[] = []
-        details.forEach((detail, index) => {
-          if (!detail) return
-          if (sessions.length > 1) {
-            messages.push({ role: 'assistant', content: `— ${sessions[index].title} —` })
-          }
-          for (const message of detail.messages) {
-            if ((message.role === 'user' || message.role === 'assistant') && message.content?.trim()) {
-              messages.push({ role: message.role, content: message.content })
-            }
-          }
-        })
-        if (!messages.length) {
-          setStatus(t('Percakapan yang dipilih tidak berisi pesan.'))
-          return
-        }
-        const title =
-          sessions.length === 1 ? sessions[0].title : `${sessions.length} ${t('percakapan')}`
-        // Ambil ~24 pesan terakhir agar konteks relevan tanpa membanjiri panel.
-        setImportedConversation({ title, messages: messages.slice(-24) })
-        setChatPanelOpen(true)
-        setStatus(t('Percakapan diimpor ke Asisten Agentic.'))
-      } catch {
-        setStatus(t('Gagal mengimpor percakapan dari chat utama.'))
-      }
-    },
-    [setChatPanelOpen, t]
-  )
 
   const openProjectFile = useCallback(
     async (path: string) => {
@@ -2989,9 +2934,6 @@ export default function CoWriterPage() {
             <button
               type="button"
               onClick={() => {
-                if (window.matchMedia('(max-width: 1023px)').matches) {
-                  setChatPanelOpen(false)
-                }
                 setFileTreeOpen(true)
               }}
               title={t('Buka panel berkas')}
@@ -3148,8 +3090,6 @@ export default function CoWriterPage() {
                 jumpToText={previewJumpText}
                 onJumpToTextHandled={() => setPreviewJumpText(null)}
                 onCapture={image => {
-                  setCapturedChatImage(image)
-                  setChatPanelOpen(true)
                   setStatus(t('Halaman pratinjau dilampirkan ke asisten.'))
                 }}
               />
@@ -3163,7 +3103,7 @@ export default function CoWriterPage() {
         {!focusMode && rightPanelOpen && (
           <div
             className="flex min-h-0 flex-col border-l border-[var(--border)]"
-            style={{ width: 300 }}
+            style={{ width: 440 }}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-2 py-1.5">
               <div className="flex gap-1">
@@ -3226,79 +3166,6 @@ export default function CoWriterPage() {
           </button>
         )}
       </div>
-
-      <div
-        className={`fixed bottom-20 right-5 z-50 flex h-[min(620px,calc(100vh-7rem))] w-[380px] flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--popover)] shadow-2xl transition-[opacity,transform,visibility] duration-150 max-sm:inset-x-3 max-sm:bottom-16 max-sm:h-[min(560px,calc(100vh-5rem))] max-sm:w-auto ${
-          chatPanelOpen && !focusMode
-            ? 'visible translate-y-0 opacity-100'
-            : 'pointer-events-none invisible translate-y-2 opacity-0'
-        }`}
-        aria-hidden={!chatPanelOpen || focusMode}
-      >
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--border)] px-3">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--primary)]/12 text-[var(--primary)]">
-            <Bot size={14} />
-          </div>
-          <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-[var(--foreground)]">
-            {t('Asisten Agentic')}
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowChatImportPicker(true)}
-            title={t('Impor percakapan dari chat utama')}
-            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-          >
-            <MessagesSquare size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setChatPanelOpen(false)}
-            title={t('Tutup asisten')}
-            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-          >
-            <X size={14} />
-          </button>
-        </div>
-        <CoWriterChatPanel
-          docId={docId}
-          onOpenReferences={() => {
-            setRightPanelTab('referensi')
-            setRightPanelOpen(true)
-          }}
-          onOpenAgentic={() => {
-            setRightPanelTab('agentic')
-            setRightPanelOpen(true)
-          }}
-          onOpenFullEdit={() => setIsEditModalOpen(true)}
-          onImportChat={() => setShowChatImportPicker(true)}
-          importedConversation={importedConversation}
-          onImportedConversationConsumed={() => setImportedConversation(null)}
-          onExportPdf={handleExportPdf}
-          onExportDocx={handleExportDocx}
-          externalImage={capturedChatImage}
-          onExternalImageConsumed={() => setCapturedChatImage(null)}
-          externalPrompt={externalChatPrompt}
-          onExternalPromptConsumed={() => setExternalChatPrompt(null)}
-          onInsert={insertIntoEditor}
-        />
-      </div>
-
-      {!focusMode && !chatPanelOpen ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (window.matchMedia('(max-width: 1023px)').matches) {
-              setFileTreeOpen(false)
-            }
-            setChatPanelOpen(true)
-          }}
-          title={t('Buka asisten agentic')}
-          aria-label={t('Buka asisten agentic')}
-          className="fixed bottom-20 right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--primary)]/30 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-lg transition-[transform,opacity] hover:scale-105 hover:opacity-95 active:scale-95 max-sm:bottom-16 max-sm:right-3"
-        >
-          <Bot size={19} />
-        </button>
-      ) : null}
 
       {selectionPopover.visible && selectedRange && (
         <div
@@ -3655,12 +3522,6 @@ export default function CoWriterPage() {
           </div>
         </div>
       )}
-
-      <HistorySessionPicker
-        open={showChatImportPicker}
-        onClose={() => setShowChatImportPicker(false)}
-        onApply={handleApplyChatImport}
-      />
 
       {/* ── PRD 9.2: Diff inline AI edit — Accept/Reject per chunk ── */}
       {pendingDiff && (

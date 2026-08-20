@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 
 import ModelSelector from '@/components/chat/home/ModelSelector'
+import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import JournalWorkflowMenu, {
   type JournalWorkflowPreset,
 } from '@/components/chat/JournalWorkflowMenu'
@@ -78,6 +79,8 @@ interface CoWriterChatPanelProps {
   onInsert: (text: string) => void
   onOpenReferences?: () => void
   onOpenAgentic?: () => void
+  /** Teruskan teks ke Agentic Run (satu tempat input: semua dikerjakan agentic). */
+  onRequestAgentic?: (text: string) => void
   /** Buka modal "Edit Draf AI" (perbaiki/rapikan seluruh draf) dari panel. */
   onOpenFullEdit?: () => void
   /** Buka pemilih untuk mengimpor percakapan dari chat utama. */
@@ -116,6 +119,7 @@ export default function CoWriterChatPanel({
   onInsert,
   onOpenReferences,
   onOpenAgentic,
+  onRequestAgentic,
   onOpenFullEdit,
   onImportChat,
   importedConversation,
@@ -583,6 +587,13 @@ export default function CoWriterChatPanel({
       return
     }
     setBusy(true)
+    // Satu tempat input: semua permintaan dikerjakan Agentic Run (riset web,
+    // tulis bab, sitasi). Chat tanya-jawab hanya untuk aksi cepat/slash command.
+    if (onRequestAgentic) {
+      onRequestAgentic(text)
+      setBusy(false)
+      return
+    }
     const controller = new AbortController()
     abortRef.current = controller
     try {
@@ -676,6 +687,7 @@ export default function CoWriterChatPanel({
     includeReferences,
     input,
     llmSelection,
+    onRequestAgentic,
     researchMode,
     runWorkspaceAction,
     turns,
@@ -823,7 +835,15 @@ export default function CoWriterChatPanel({
                     : 'bg-[var(--muted)]/60 text-[var(--foreground)]'
                 }`}
               >
-                <div className="whitespace-pre-wrap">{turn.content}</div>
+                {turn.role === 'assistant' ? (
+                  <MarkdownRenderer
+                    content={turn.content}
+                    variant="default"
+                    className="text-[var(--foreground)]"
+                  />
+                ) : (
+                  <div className="whitespace-pre-wrap">{turn.content}</div>
+                )}
                 {turn.role === 'assistant' && turn.evidence ? (
                   <div
                     className="mt-2 flex flex-wrap gap-1 border-t border-[var(--border)]/60 pt-1.5 text-[9.5px] text-[var(--muted-foreground)]"
@@ -867,27 +887,6 @@ export default function CoWriterChatPanel({
                     alt={t('Gambar konteks')}
                     className="mt-2 max-h-44 w-auto rounded-md border border-[var(--border)]"
                   />
-                ) : null}
-                {/* PRD: render gambar markdown di balasan chat */}
-                {/!\[[^\]]*\]\([^)]+\)/.test(turn.content) ? (
-                  <div className="mt-1.5 space-y-1.5">
-                    {turn.content
-                      .split(/\n/)
-                      .filter(ln => /!\[[^\]]*\]\([^)]+\)/.test(ln))
-                      .map((ln, gi) => {
-                        const m = ln.match(/!\[([^\]]*)\]\(([^)]+)\)/)
-                        if (!m) return null
-                        return (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            key={gi}
-                            src={m[2]}
-                            alt={m[1] || 'gambar'}
-                            className="max-h-40 w-auto rounded-lg border border-[var(--border)]"
-                          />
-                        )
-                      })}
-                  </div>
                 ) : null}
                 {turn.role === 'assistant' ? (
                   <div className="mt-1.5 flex flex-wrap justify-end gap-1.5">

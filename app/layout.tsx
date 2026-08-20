@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Alfa_Slab_One, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import ThemeScript from "@/components/ThemeScript";
 import ToastViewport from "@/components/common/ToastViewport";
 import { AppShellProvider } from "@/context/AppShellContext";
 import { I18nClientBridge } from "@/i18n/I18nClientBridge";
@@ -52,7 +51,13 @@ export default function RootLayout({
       className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable}`}
     >
       <head>
-        <ThemeScript />
+        {/* Tema dipasang sebelum cat pertama supaya tidak ada kilatan tema
+            salah. Dimuat dari berkas statis, bukan skrip inline: React 19
+            memperingatkan setiap render untuk `<script>` inline di dalam
+            komponen ("Encountered a script tag while rendering React
+            component"). Tanpa `async`/`defer` — harus bloking agar kelas tema
+            sudah menempel di <html> saat halaman pertama digambar. */}
+        <script src="/theme-init.js" />
       </head>
       <body
         className="font-sans bg-[var(--background)] text-[var(--foreground)]"

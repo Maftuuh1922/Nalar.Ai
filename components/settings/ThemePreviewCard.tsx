@@ -60,13 +60,17 @@ const PALETTES: Record<Theme, Palette> = {
     muted: '#36373a',
     border: 'rgba(255,255,255,0.14)',
   },
+  // Palet krem hangat ala Claude + aksen terakota. Kartu pratinjau harus
+  // mencerminkan tema sebenarnya: sebelumnya ia menyalin palet gelap, sehingga
+  // pengguna yang memilih "Glass" mengira akan mendapat antarmuka gelap.
   glass: {
-    bg: '#2b2c2f',
-    fg: '#f2f3f4',
-    card: '#333437',
-    primary: '#4da3ff',
-    muted: '#36373a',
-    border: 'rgba(255,255,255,0.14)',
+    bg: '#f5f1e8',
+    fg: '#3d3d3a',
+    card: 'rgba(255,253,248,0.78)',
+    primary: '#d97757',
+    muted: 'rgba(61,61,58,0.06)',
+    border: 'rgba(61,61,58,0.14)',
+    glass: true,
   },
 }
 
@@ -97,12 +101,17 @@ function MiniPreview({ palette }: { palette: Palette }) {
       {glass && (
         <>
           <defs>
-            <radialGradient id="glass-shine" cx="20%" cy="0%" r="80%">
-              <stop offset="0%" stopColor="rgba(168,85,247,0.38)" />
-              <stop offset="100%" stopColor="rgba(168,85,247,0)" />
+            <radialGradient id="glass-shine" cx="18%" cy="0%" r="80%">
+              <stop offset="0%" stopColor="rgba(217,119,87,0.34)" />
+              <stop offset="100%" stopColor="rgba(217,119,87,0)" />
+            </radialGradient>
+            <radialGradient id="glass-shine-2" cx="92%" cy="4%" r="70%">
+              <stop offset="0%" stopColor="rgba(214,178,122,0.32)" />
+              <stop offset="100%" stopColor="rgba(214,178,122,0)" />
             </radialGradient>
           </defs>
           <rect x="0" y="0" width="160" height="96" rx="6" fill="url(#glass-shine)" />
+          <rect x="0" y="0" width="160" height="96" rx="6" fill="url(#glass-shine-2)" />
         </>
       )}
 

@@ -103,27 +103,25 @@ export default function AppearanceSettingsPage() {
         )}
       >
         <div className="py-4">
-          {/* The Beautiful UI design language ships two looks — Light and
-              Dark (blue accent on neutral greys). Legacy theme ids "light"
-              and "glass" still resolve to the same CSS (light / dark) for
-              stored preferences, but the picker offers the real choices. */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* Empat tampilan yang benar-benar punya CSS sendiri. `glass` dulu
+              tidak ditawarkan di sini dan malah dipetakan ke tile "Dark"
+              (`id === 'dark' && theme === 'glass'`), sehingga temanya tidak
+              pernah bisa dipilih dari antarmuka. Alias id lama `light` → `snow`
+              tetap dipertahankan untuk preferensi yang sudah tersimpan. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {(
               [
                 { id: 'ascii', label: t('ASCII') },
                 { id: 'snow', label: t('Light') },
                 { id: 'dark', label: t('Dark') },
+                { id: 'glass', label: t('Glass') },
               ] as const
             ).map(({ id, label }) => (
               <ThemePreviewCard
                 key={id}
                 theme={id}
                 label={label}
-                selected={
-                  theme === id ||
-                  (id === 'snow' && theme === 'light') ||
-                  (id === 'dark' && theme === 'glass')
-                }
+                selected={theme === id || (id === 'snow' && theme === 'light')}
                 onSelect={updateTheme}
               />
             ))}
@@ -131,6 +129,11 @@ export default function AppearanceSettingsPage() {
           <p className="mt-4 text-[11.5px] leading-relaxed text-[var(--muted-foreground)]/80">
             {t(
               'ASCII uses a monochrome research-workspace style with halftone texture, monospace interface text, and high-contrast controls.'
+            )}
+          </p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--muted-foreground)]/80">
+            {t(
+              'Glass memakai palet krem hangat dengan aksen terakota dan permukaan tembus pandang berblur. Area baca (dokumen, pratinjau, blok kode) tetap solid supaya teks tidak kehilangan kontras.'
             )}
           </p>
         </div>

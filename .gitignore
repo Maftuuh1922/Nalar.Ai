@@ -25,3 +25,7 @@ playwright-report/
 # Alat bantu lokal
 .vscode/
 .claude/
+
+# Worker SuperDoc — disalin dari node_modules oleh scripts/copy-superdoc-workers.mjs
+# (postinstall). Proprietary + content-hashed, jangan di-commit.
+public/superdoc/

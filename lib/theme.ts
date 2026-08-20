@@ -3,7 +3,7 @@
  * Handles light/dark theme with localStorage fallback and system preference detection
  */
 
-export type Theme = 'light' | 'dark' | 'glass' | 'snow' | 'ascii'
+export type Theme = 'light' | 'dark' | 'glass' | 'glass-dark' | 'snow' | 'ascii'
 
 export const THEME_STORAGE_KEY = 'nalar-ai-theme'
 
@@ -67,7 +67,7 @@ export function saveThemeToStorage(theme: Theme): boolean {
 /**
  * Get system preference for theme.
  * New installations start with the monochrome ASCII theme. Must stay in sync
- * with the inline ThemeScript fallback.
+ * with the public/theme-init.js pre-hydration script.
  */
 export function getSystemTheme(): Theme {
   if (typeof window === 'undefined') return 'ascii'
@@ -88,7 +88,10 @@ export function applyThemeToDocument(theme: Theme): void {
   if (theme === 'dark') {
     html.classList.add('dark')
   } else if (theme === 'glass') {
-    html.classList.add('dark', 'theme-glass')
+    // Sengaja TANPA kelas `dark`: tema kaca memakai palet krem hangat (terang),
+    // jadi varian `dark:` di komponen tidak boleh ikut menyala — kalau ikut,
+    // teks terang bertumpuk di atas permukaan terang dan menjadi tak terbaca.
+    html.classList.add('theme-glass')
   } else if (theme === 'snow') {
     html.classList.add('theme-snow')
   } else if (theme === 'ascii') {

@@ -7,11 +7,12 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
-  useCallback,
 } from "react";
 import SuperDocEditor, {
   type SuperDocRef,
@@ -238,7 +239,22 @@ const SuperDocEditorWrapper = forwardRef<SuperDocEditorHandle, Props>(
     useEffect(() => {
       onChangeRef.current = onChange;
     }, [onChange]);
+    // Worker assets SuperDoc v2 — disalin ke /public/superdoc karena
+    // Turbopack dev tidak menyajikan worker bawaan node_modules. Penyalinan
+    // dilakukan scripts/copy-superdoc-workers.mjs (via `postinstall`) dengan
+    // nama stabil, jadi path di bawah tidak ikut berubah saat hash rilis baru.
+    const workerUrls = useMemo(
+      () => ({
+        document: "/superdoc/browser-worker-entry.js",
+        collaboration: "/superdoc/collaboration-worker-entry.js",
+        reviewIndex: "/superdoc/review-index-worker-entry.js",
+      }),
+      []
+    );
     const [loading, setLoading] = useState(true);
+    // Ref sinkron dari state loading — dipakai di setTimeout (closure lama
+    // tidak boleh membaca state yang sudah basi).
+    const loadingRef = useRef(true);
     const [error, setError] = useState("");
     // Sumber dokumen: derive langsung dari props (docUrl ?? initialFile).
     // Tidak pakai state/effect — SuperDocEditor diremount via key saat ganti
@@ -269,16 +285,45 @@ const SuperDocEditorWrapper = forwardRef<SuperDocEditorHandle, Props>(
 
     const handleReady = useCallback(() => {
       if (!mountedRef.current) return;
+      loadingRef.current = false;
       setLoading(false);
     }, []);
 
     const handleException = useCallback((e: unknown) => {
-      console.error("SuperDoc exception:", e);
+      // Payload SuperDoc: { error, document } untuk exception ekspor/operasi;
+      // { message, code } untuk exception inisialisasi. Log detail lengkap
+      // supaya error `{}` yang misterius bisa dilacak dari console.
+      try {
+        console.error(
+          "SuperDoc exception:",
+          e && typeof e === "object" ? JSON.stringify(e, Object.getOwnPropertyNames(e)) : String(e)
+        );
+      } catch {
+        console.error("SuperDoc exception:", e);
+      }
       if (!mountedRef.current) return;
-      setError("SuperDoc gagal memuat dokumen.");
-      setLoading(false);
-      initGuardRef.current = false;
-    }, []);
+      // Exception saat editor SUDAH ready = error operasi (ekspor/autosave),
+      // bukan kegagalan memuat dokumen — jangan tutup editor dengan layar
+      // merah; dokumen tetap bisa disunting.
+      if (!loading) {
+        console.warn("SuperDoc: exception non-fatal (editor sudah siap), dokumen tetap terbuka.");
+        return;
+      }
+      // Exception saat editor BELUM ready: SuperDoc mengirim exception dini
+      // (mis. ekspor awal sebelum Y.Doc terhydrate, `ydoc: undefined`) yang
+      // sebenarnya non-fatal — dokumen selesai dimuat sesaat kemudian. Beri
+      // tenggat 8 detik: kalau onReady datang lebih dulu, abaikan; kalau
+      // benar-benar gagal, baru tampilkan layar error.
+      console.warn("SuperDoc: exception saat inisialisasi — menunggu onReady hingga 8 detik…");
+      window.setTimeout(() => {
+        if (!mountedRef.current) return;
+        if (loadingRef.current) {
+          setError("SuperDoc gagal memuat dokumen.");
+          setLoading(false);
+          initGuardRef.current = false;
+        }
+      }, 8000);
+    }, [loading]);
 
     // ── Helper Document API (Layer 0) ─────────────────────────────────────
     // `superdoc.activeEditor.doc` (BrowserDocumentApi) — worker-backed, jadi
@@ -579,6 +624,7 @@ const SuperDocEditorWrapper = forwardRef<SuperDocEditorHandle, Props>(
     const props: SuperDocEditorProps = {
       ...(docSource ? { document: docSource } : {}),
       documentMode: "editing",
+      workerUrls,
       onReady: handleReady,
       onEditorUpdate: () => onChangeRef.current?.(),
       onTransaction: () => onChangeRef.current?.(),
